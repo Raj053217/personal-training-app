@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>FitwithRj</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['-apple-system', 'BlinkMacSystemFont', 'Inter', 'sans-serif'],
+            },
+            colors: {
+              ios: {
+                bg: { light: '#F2F2F7', dark: '#000000' },
+                card: { light: '#FFFFFF', dark: '#1C1C1E' },
+                separator: { light: '#C6C6C8', dark: '#38383A' },
+                blue: '#007AFF',
+                green: '#34C759',
+                red: '#FF3B30',
+                orange: '#FF9500',
+                gray: '#8E8E93',
+                gray2: '#AEAEB2',
+                gray3: '#C7C7CC',
+                gray4: '#D1D1D6',
+                gray5: '#E5E5EA',
+                gray6: '#F2F2F7',
+              }
+            },
+            boxShadow: {
+              'ios': '0 1px 2px rgba(0,0,0,0.04)',
+              'ios-lg': '0 10px 40px -10px rgba(0,0,0,0.1)'
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      html {
+        -webkit-tap-highlight-color: transparent;
+        scroll-behavior: smooth;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: #F2F2F7;
+        color: #000000;
+        overscroll-behavior-y: none;
+      }
+      
+      body.dark {
+        background-color: #000000;
+        color: #FFFFFF;
+      }
+
+      /* iOS Scrollbar hide */
+      ::-webkit-scrollbar {
+        display: none;
+      }
+
+      /* Safe area insets */
+      .safe-top { padding-top: env(safe-area-inset-top); }
+      .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+      
+      .ios-blur {
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        background-color: rgba(255, 255, 255, 0.7);
+      }
+      .dark .ios-blur {
+        background-color: rgba(28, 28, 30, 0.7);
+      }
+
+      .ios-list-item:active {
+        background-color: #E5E5EA;
+      }
+      .dark .ios-list-item:active {
+        background-color: #2C2C2E;
+      }
+
+      @keyframes slideInRight {
+        from { transform: translateX(100%); }
+        to { transform: translateX(0); }
+      }
+      .page-enter {
+        animation: slideInRight 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+      }
+
+      @media print {
+        .no-print { display: none !important; }
+        body { background-color: white !important; color: black !important; }
+        #root { width: 100%; margin: 0; padding: 0; }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "uuid": "https://esm.sh/uuid@^13.0.0",
+    "date-fns": "https://esm.sh/date-fns@^4.1.0",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
+    "firebase/": "https://esm.sh/firebase@^12.8.0/"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
