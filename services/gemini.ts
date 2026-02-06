@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { Client } from '../types';
 
@@ -27,12 +28,13 @@ const getAnonymousStats = (clients: Client[]) => {
   };
 };
 
+/**
+ * Generates high-level business insights based on client data and scheduling context.
+ * Uses gemini-3-pro-preview as this involves complex reasoning and analysis.
+ */
 export const generateBusinessInsight = async (clients: Client[], scheduleContext?: ScheduleContext): Promise<string> => {
   try {
-    if (!process.env.API_KEY) {
-      return "Please configure your API Key to receive business insights.";
-    }
-
+    // Initialization using aistudio guidelines: named parameter and environment variable
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const stats = getAnonymousStats(clients);
     
@@ -70,14 +72,16 @@ export const generateBusinessInsight = async (clients: Client[], scheduleContext
       `;
     }
 
+    // Using gemini-3-pro-preview for complex reasoning task
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
         temperature: 0.7,
       }
     });
 
+    // Accessing .text property directly as per guidelines
     return response.text || "Could not generate insights at this time.";
   } catch (error) {
     console.error("Gemini API Error:", error);
@@ -85,9 +89,12 @@ export const generateBusinessInsight = async (clients: Client[], scheduleContext
   }
 };
 
+/**
+ * Summarizes client notes into key points.
+ * Uses gemini-3-flash-preview as summarization is a basic text task.
+ */
 export const generateClientNoteSummary = async (notes: string): Promise<string> => {
     try {
-        if (!process.env.API_KEY) return "API Key missing.";
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         
         const prompt = `Summarize these personal training client notes into 3 key bullet points for quick review before a session:\n\n${notes}`;

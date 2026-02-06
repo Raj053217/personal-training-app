@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Client, DietMeal, WorkoutDay } from '../types';
 import { format } from 'date-fns';
-import { X, Download, Loader2, Dumbbell, Utensils, Info } from 'lucide-react';
+import { X, Download, Loader2, Dumbbell, Utensils, Info, Printer } from 'lucide-react';
 
 interface PlanPDFProps {
   client: Client;
@@ -168,47 +168,45 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
   );
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-xl p-0 sm:p-4 animate-fadeIn">
+      <div className="bg-[#F2F2F7] dark:bg-black rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b bg-gray-50">
+        <div className="flex justify-between items-center px-4 h-16 border-b bg-white dark:bg-[#1C1C1E] dark:border-white/5">
            <div className="flex items-center gap-3">
-               <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition"><X size={20} className="text-gray-500"/></button>
-               <h2 className="font-bold text-gray-800 hidden sm:block">
-                   {type === 'diet' ? 'Diet Plan Preview' : type === 'workout' ? 'Workout Plan Preview' : 'Full Program Preview'}
-               </h2>
+               <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-full transition active:scale-90"><X size={24} className="text-gray-500"/></button>
+               <h2 className="font-black text-black dark:text-white uppercase tracking-tight hidden sm:block">Program Preview</h2>
            </div>
-           <button onClick={handleDownload} disabled={isDownloading} className="text-white font-bold text-sm flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/20 transition active:scale-95 disabled:opacity-50 disabled:scale-100">
-                {isDownloading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                <span>Download PDF</span>
+           <button onClick={handleDownload} disabled={isDownloading} className="bg-blue-600 text-white font-black text-xs uppercase tracking-widest flex items-center gap-2 px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20 transition active:scale-95 disabled:opacity-50 disabled:scale-100">
+                {isDownloading ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />}
+                <span>{isDownloading ? 'Building PDF...' : 'Download Program'}</span>
            </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-8">
-            <div id="printable-plan-area" className="bg-white shadow-xl mx-auto max-w-[800px] min-h-[1000px] p-8 sm:p-12 relative">
+        {/* Content Preview Container */}
+        <div className="flex-1 overflow-y-auto bg-gray-200/50 dark:bg-zinc-900/50 p-4 sm:p-8">
+            <div id="printable-plan-area" className="bg-white shadow-2xl mx-auto max-w-[800px] min-h-[1000px] p-8 sm:p-14 relative rounded-sm">
                 {/* PDF Header */}
-                <div className="flex justify-between items-start mb-10 pb-6 border-b-4 border-gray-900">
+                <div className="flex justify-between items-start mb-10 pb-8 border-b-4 border-gray-900">
                     <div>
-                        <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter mb-1">FitwithRj</h1>
-                        <p className="text-sm font-bold text-gray-400 uppercase tracking-[0.2em]">Personal Training System</p>
+                        <h1 className="text-5xl font-black text-gray-900 uppercase tracking-tighter mb-1">FitwithRj</h1>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Personal Training Excellence</p>
                     </div>
                     <div className="text-right">
-                        <h2 className="text-2xl font-bold text-gray-800">{client.name}</h2>
-                        <div className="flex flex-col items-end mt-1">
-                            <span className="text-xs font-bold text-white bg-black px-2 py-0.5 rounded uppercase">
-                                {type === 'full' ? 'Comprehensive Program' : type === 'diet' ? 'Nutrition Plan' : 'Workout Routine'}
+                        <h2 className="text-3xl font-black text-gray-800 uppercase tracking-tight">{client.name}</h2>
+                        <div className="flex flex-col items-end mt-2">
+                            <span className="text-[10px] font-black text-white bg-black px-3 py-1 rounded uppercase tracking-widest">
+                                {type === 'full' ? 'Complete Transformation Program' : type === 'diet' ? 'Optimized Nutrition Plan' : 'Dynamic Training Routine'}
                             </span>
-                            <span className="text-xs text-gray-400 mt-1 font-medium">Generated: {format(new Date(), 'MMM dd, yyyy')}</span>
+                            <span className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Cycle Date: {format(new Date(), 'MMMM dd, yyyy')}</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Body */}
-                <div className="mb-10 space-y-12">
+                {/* Body Content */}
+                <div className="mb-12 space-y-16">
                     {(type === 'diet' || type === 'full') && dietData && dietData.length > 0 && (
                         <div>
-                            <PlanHeader title="Nutrition Plan" icon={Utensils} />
+                            <PlanHeader title="Nutritional Strategy" icon={Utensils} />
                             {renderDiet(dietData)}
                         </div>
                     )}
@@ -219,16 +217,19 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
 
                     {(type === 'workout' || type === 'full') && workoutData && workoutData.length > 0 && (
                         <div>
-                            <PlanHeader title="Workout Routine" icon={Dumbbell} />
+                            <PlanHeader title="Training Protocol" icon={Dumbbell} />
                             {renderWorkout(workoutData)}
                         </div>
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="mt-16 pt-6 border-t border-gray-100 flex justify-between items-center text-gray-400 text-xs">
-                     <p>FitwithRj • Personal Training</p>
-                     <p className="font-bold italic">"Transformation starts here."</p>
+                {/* PDF Footer */}
+                <div className="mt-20 pt-8 border-t border-gray-100 flex justify-between items-end text-gray-400">
+                     <div className="text-[10px] font-bold uppercase tracking-widest">
+                         <p>FitwithRj • Digital Coaching Platform</p>
+                         <p className="mt-1">Powered by PT Manage Pro</p>
+                     </div>
+                     <p className="font-black italic text-gray-900 text-lg tracking-tighter">"Results are earned."</p>
                 </div>
             </div>
         </div>
