@@ -9,7 +9,7 @@ interface PlanBuilderProps {
   onChange: (data: any[]) => void;
 }
 
-const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data, onChange }) => {
+const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange }) => {
   
   // --- Diet Helpers ---
   const addMeal = () => onChange([...data, { id: uuidv4(), name: 'New Meal', items: [] }]);
@@ -58,7 +58,7 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data, onChange }) => {
   };
 
   if (type === 'diet') {
-      const dietData = data as DietMeal[];
+      const dietData = (data || []) as DietMeal[];
       return (
         <div className="space-y-4 animate-fadeIn">
             {dietData.map((meal) => {
@@ -70,7 +70,7 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data, onChange }) => {
                 return (
                     <div key={meal.id} className="bg-white dark:bg-[#1C1C1E] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-white/5 relative group">
                         <div className="flex justify-between items-center mb-1">
-                            <input type="text" value={meal.name} onChange={(e) => updateMeal(meal.id, 'name', e.target.value)} className="font-bold text-lg bg-transparent outline-none text-black dark:text-white placeholder-gray-400" placeholder="Meal Name" />
+                            <input type="text" value={meal.name || ''} onChange={(e) => updateMeal(meal.id, 'name', e.target.value)} className="font-bold text-lg bg-transparent outline-none text-black dark:text-white placeholder-gray-400" placeholder="Meal Name" />
                             <div className="flex items-center gap-2">
                                 <input type="text" value={meal.time || ''} onChange={(e) => updateMeal(meal.id, 'time', e.target.value)} className="text-xs font-medium bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-md outline-none w-20 text-center" placeholder="Time" />
                                 <button onClick={() => removeMeal(meal.id)} className="bg-red-50 text-red-500 p-1.5 rounded-full"><Trash2 size={12}/></button>
@@ -86,15 +86,15 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data, onChange }) => {
                             {meal.items.map((item) => (
                                 <div key={item.id} className="bg-gray-50 dark:bg-black/20 p-3 rounded-xl">
                                     <div className="flex gap-2 mb-2">
-                                        <input type="text" value={item.food} onChange={(e) => updateDietItem(meal.id, item.id, 'food', e.target.value)} className="flex-1 bg-white dark:bg-white/5 rounded-lg px-2 py-1.5 text-sm outline-none font-medium" placeholder="Food Item" />
-                                        <input type="text" value={item.portion} onChange={(e) => updateDietItem(meal.id, item.id, 'portion', e.target.value)} className="w-20 bg-white dark:bg-white/5 rounded-lg px-2 py-1.5 text-sm outline-none text-center" placeholder="Qty" />
+                                        <input type="text" value={item.food || ''} onChange={(e) => updateDietItem(meal.id, item.id, 'food', e.target.value)} className="flex-1 bg-white dark:bg-white/5 rounded-lg px-2 py-1.5 text-sm outline-none font-medium" placeholder="Food Item" />
+                                        <input type="text" value={item.portion || ''} onChange={(e) => updateDietItem(meal.id, item.id, 'portion', e.target.value)} className="w-20 bg-white dark:bg-white/5 rounded-lg px-2 py-1.5 text-sm outline-none text-center" placeholder="Qty" />
                                         <button onClick={() => removeDietItem(meal.id, item.id)} className="text-gray-400 hover:text-red-500"><X size={16}/></button>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2">
-                                        <input type="number" value={item.calories} onChange={(e) => updateDietItem(meal.id, item.id, 'calories', e.target.value)} className="bg-transparent text-xs outline-none border-b border-gray-200 dark:border-gray-700 pb-1 text-center" placeholder="Cals" />
-                                        <input type="number" value={item.protein} onChange={(e) => updateDietItem(meal.id, item.id, 'protein', e.target.value)} className="bg-transparent text-xs outline-none border-b border-blue-200 dark:border-blue-900 pb-1 text-center text-blue-500" placeholder="Prot" />
-                                        <input type="number" value={item.carbs} onChange={(e) => updateDietItem(meal.id, item.id, 'carbs', e.target.value)} className="bg-transparent text-xs outline-none border-b border-orange-200 dark:border-orange-900 pb-1 text-center text-orange-500" placeholder="Carb" />
-                                        <input type="number" value={item.fats} onChange={(e) => updateDietItem(meal.id, item.id, 'fats', e.target.value)} className="bg-transparent text-xs outline-none border-b border-yellow-200 dark:border-yellow-900 pb-1 text-center text-yellow-500" placeholder="Fat" />
+                                        <input type="number" value={item.calories || ''} onChange={(e) => updateDietItem(meal.id, item.id, 'calories', e.target.value)} className="bg-transparent text-xs outline-none border-b border-gray-200 dark:border-gray-700 pb-1 text-center" placeholder="Cals" />
+                                        <input type="number" value={item.protein || ''} onChange={(e) => updateDietItem(meal.id, item.id, 'protein', e.target.value)} className="bg-transparent text-xs outline-none border-b border-blue-200 dark:border-blue-900 pb-1 text-center text-blue-500" placeholder="Prot" />
+                                        <input type="number" value={item.carbs || ''} onChange={(e) => updateDietItem(meal.id, item.id, 'carbs', e.target.value)} className="bg-transparent text-xs outline-none border-b border-orange-200 dark:border-orange-900 pb-1 text-center text-orange-500" placeholder="Carb" />
+                                        <input type="number" value={item.fats || ''} onChange={(e) => updateDietItem(meal.id, item.id, 'fats', e.target.value)} className="bg-transparent text-xs outline-none border-b border-yellow-200 dark:border-yellow-900 pb-1 text-center text-yellow-500" placeholder="Fat" />
                                     </div>
                                 </div>
                             ))}
@@ -118,13 +118,13 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data, onChange }) => {
         </div>
       );
   } else {
-      const workoutData = data as WorkoutDay[];
+      const workoutData = (data || []) as WorkoutDay[];
       return (
         <div className="space-y-4 animate-fadeIn">
             {workoutData.map((day) => (
                 <div key={day.id} className="bg-white dark:bg-[#1C1C1E] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-white/5 relative group">
                     <div className="flex justify-between items-center mb-3">
-                        <input type="text" value={day.name} onChange={(e) => updateWorkoutDay(day.id, 'name', e.target.value)} className="font-bold text-lg bg-transparent outline-none text-black dark:text-white placeholder-gray-400" placeholder="Day Name (e.g. Push Day)" />
+                        <input type="text" value={day.name || ''} onChange={(e) => updateWorkoutDay(day.id, 'name', e.target.value)} className="font-bold text-lg bg-transparent outline-none text-black dark:text-white placeholder-gray-400" placeholder="Day Name (e.g. Push Day)" />
                         <button onClick={() => removeWorkoutDay(day.id)} className="bg-red-50 text-red-500 p-1.5 rounded-full"><Trash2 size={12}/></button>
                     </div>
                     <div className="space-y-4">
@@ -142,17 +142,17 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data, onChange }) => {
                         {day.exercises.map((ex) => (
                             <div key={ex.id} className="bg-gray-50 dark:bg-black/20 p-3 rounded-xl">
                                     <div className="flex justify-between items-start mb-2">
-                                        <input type="text" value={ex.name} onChange={(e) => updateExercise(day.id, ex.id, 'name', e.target.value)} className="flex-1 bg-transparent text-sm font-bold outline-none border-b border-transparent focus:border-gray-300" placeholder="Exercise Name" />
+                                        <input type="text" value={ex.name || ''} onChange={(e) => updateExercise(day.id, ex.id, 'name', e.target.value)} className="flex-1 bg-transparent text-sm font-bold outline-none border-b border-transparent focus:border-gray-300" placeholder="Exercise Name" />
                                         <button onClick={() => removeExercise(day.id, ex.id)} className="text-gray-400 hover:text-red-500 ml-2"><X size={14}/></button>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2 mb-2">
                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
                                             <p className="text-[9px] text-gray-400 uppercase font-bold text-center">Sets</p>
-                                            <input type="text" value={ex.sets} onChange={(e) => updateExercise(day.id, ex.id, 'sets', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="3" />
+                                            <input type="text" value={ex.sets || ''} onChange={(e) => updateExercise(day.id, ex.id, 'sets', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="3" />
                                         </div>
                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
                                             <p className="text-[9px] text-gray-400 uppercase font-bold text-center">Reps</p>
-                                            <input type="text" value={ex.reps} onChange={(e) => updateExercise(day.id, ex.id, 'reps', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="12" />
+                                            <input type="text" value={ex.reps || ''} onChange={(e) => updateExercise(day.id, ex.id, 'reps', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="12" />
                                         </div>
                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
                                             <p className="text-[9px] text-gray-400 uppercase font-bold text-center">Rest</p>

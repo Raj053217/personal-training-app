@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Client, PlanTemplate, DietMeal, WorkoutDay } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Search, Plus, Trash2, FileText, Download, ChevronRight, User, FolderOpen, Save, ArrowLeft, Copy } from 'lucide-react';
+import { Search, Plus, Trash2, FileText, Download, ChevronRight, User, FolderOpen, Save, ArrowLeft, Copy, Printer, Eye } from 'lucide-react';
 import PlanBuilder from './PlanBuilder';
 import PlanPDF from './PlanPDF';
 import { saveTemplates, loadTemplates } from '../services/storage';
@@ -27,7 +27,7 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
   const [newTemplateName, setNewTemplateName] = useState('');
 
   // PDF State
-  const [showPdf, setShowPdf] = useState<{ type: 'diet'|'workout'|'full', clientName: string, data: any } | null>(null);
+  const [showPdf, setShowPdf] = useState<{ type: 'diet'|'workout'|'full', clientName: string, data?: any, client?: Client } | null>(null);
   const [pdfNameInput, setPdfNameInput] = useState('');
 
   // Search
@@ -50,7 +50,8 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
 
       let updated;
       if (editingTemplate) {
-          updated = templates.map(t => t.id === t.id ? newTemplate : t);
+          // FIX: Ensure we only update the matching ID
+          updated = templates.map(t => t.id === editingTemplate.id ? newTemplate : t);
       } else {
           updated = [...templates, newTemplate];
       }
@@ -136,6 +137,17 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
       }
   };
 
+  const handlePreviewPdf = () => {
+      const name = editingClient ? editingClient.name : (pdfNameInput || "Client Name");
+      
+      setShowPdf({
+          type: templateType,
+          clientName: editingClient ? editingClient.name : (templateName || "Template Preview"),
+          data: editorData,
+          client: editingClient || { name: pdfNameInput || "Client Name" } as Client
+      });
+  };
+
   // --- Render ---
 
   // 1. Editor View (Used for both Template and Client)
@@ -183,14 +195,19 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
               <PlanBuilder type={templateType} data={editorData} onChange={setEditorData} />
 
               {/* Footer Actions */}
-              <div className="fixed bottom-0 left-0 w-full p-4 bg-white/90 dark:bg-black/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 flex gap-3 safe-bottom z-30">
-                  <button onClick={() => { setEditingTemplate(null); setEditingClient(null); }} className="w-24 py-3 rounded-2xl font-bold text-gray-500 bg-gray-100 dark:bg-gray-800">Cancel</button>
+              <div className="fixed bottom-0 left-0 w-full p-4 bg-white/90 dark:bg-black/90 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 flex gap-3 safe-bottom z-30 overflow-x-auto">
+                  <button onClick={() => { setEditingTemplate(null); setEditingClient(null); }} className="px-4 py-3 rounded-2xl font-bold text-gray-500 bg-gray-100 dark:bg-gray-800">Cancel</button>
                   
+                  {/* Preview PDF Button */}
+                  <button onClick={handlePreviewPdf} className="px-4 py-3 rounded-2xl font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 flex items-center gap-2">
+                     <Eye size={18} /> <span className="hidden sm:inline">Preview PDF</span>
+                  </button>
+
                   {editingClient && (
-                      <button onClick={() => setShowSaveAsTemplate(true)} className="flex-1 py-3 rounded-2xl font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30">Save as Template</button>
+                      <button onClick={() => setShowSaveAsTemplate(true)} className="px-4 py-3 rounded-2xl font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 whitespace-nowrap">Save as Template</button>
                   )}
                   
-                  <button onClick={editingClient ? handleSaveClientPlan : handleSaveTemplate} className="flex-1 py-3 rounded-2xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-500/30">Save {editingClient ? 'Plan' : 'Template'}</button>
+                  <button onClick={editingClient ? handleSaveClientPlan : handleSaveTemplate} className="flex-1 px-4 py-3 rounded-2xl font-bold text-white bg-blue-600 shadow-lg shadow-blue-500/30 whitespace-nowrap">Save {editingClient ? 'Plan' : 'Template'}</button>
               </div>
 
               {/* Save As Template Modal */}
@@ -250,7 +267,7 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
                           </div>
                           <div className="flex items-center gap-2">
                               <button onClick={(e) => { e.stopPropagation(); setPdfNameInput(''); setShowPdf({ type: t.type, clientName: '', data: t.data }); }} className="p-2 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition flex items-center gap-1 px-3">
-                                  <Download size={16}/> <span className="text-[10px] font-bold">PDF</span>
+                                  <Printer size={16}/> <span className="text-[10px] font-bold">PDF</span>
                               </button>
                               <button onClick={(e) => handleDeleteTemplate(t.id, e)} className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition"><Trash2 size={16}/></button>
                           </div>
@@ -268,46 +285,76 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
                   <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search Clients..." className="w-full bg-gray-100 dark:bg-white/10 pl-10 pr-4 py-3 rounded-xl outline-none" />
               </div>
 
-              {clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => (
-                  <div key={c.id} onClick={() => startEditClient(c)} className="bg-white dark:bg-[#1C1C1E] p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 flex justify-between items-center cursor-pointer active:scale-[0.99] transition">
-                      <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 font-bold">
-                              {c.name.charAt(0)}
-                          </div>
-                          <div>
-                              <h3 className="font-bold text-black dark:text-white">{c.name}</h3>
-                              <p className="text-xs text-gray-400">
-                                  {Array.isArray(c.dietPlan) && c.dietPlan.length > 0 ? 'Has Diet' : 'No Diet'} • {Array.isArray(c.workoutRoutine) && c.workoutRoutine.length > 0 ? 'Has Workout' : 'No Workout'}
-                              </p>
-                          </div>
-                      </div>
-                      <ChevronRight size={20} className="text-gray-300"/>
-                  </div>
-              ))}
+              {clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => {
+                  const hasDiet = Array.isArray(c.dietPlan) && c.dietPlan.length > 0;
+                  const hasWorkout = Array.isArray(c.workoutRoutine) && c.workoutRoutine.length > 0;
+                  
+                  return (
+                    <div key={c.id} onClick={() => startEditClient(c)} className="bg-white dark:bg-[#1C1C1E] p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 flex justify-between items-center cursor-pointer active:scale-[0.99] transition">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 font-bold">
+                                {c.name.charAt(0)}
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-black dark:text-white">{c.name}</h3>
+                                <p className="text-xs text-gray-400">
+                                    {hasDiet ? 'Diet ✓' : 'No Diet'} • {hasWorkout ? 'Workout ✓' : 'No Workout'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             {(hasDiet || hasWorkout) && (
+                                 <button 
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        setShowPdf({ 
+                                            type: (hasDiet && hasWorkout) ? 'full' : (hasDiet ? 'diet' : 'workout'), 
+                                            clientName: c.name, 
+                                            data: undefined, 
+                                            client: c
+                                        }); 
+                                    }} 
+                                    className="p-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-200 transition"
+                                 >
+                                     <Download size={16} />
+                                 </button>
+                             )}
+                            <ChevronRight size={20} className="text-gray-300"/>
+                        </div>
+                    </div>
+                  );
+              })}
           </div>
       )}
 
-      {/* Quick PDF Modal for Templates */}
+      {/* Quick PDF Modal */}
       {showPdf && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
               <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl w-full max-w-sm shadow-2xl">
-                  <h3 className="text-xl font-black text-black dark:text-white mb-2">Generate Sample PDF</h3>
-                  <p className="text-sm text-gray-500 mb-4">Enter a client name to appear on the PDF.</p>
-                  <input type="text" value={pdfNameInput} onChange={e => setPdfNameInput(e.target.value)} placeholder="Client Name (e.g. John Doe)" className="w-full bg-gray-100 dark:bg-white/5 p-3 rounded-xl outline-none font-bold mb-4" autoFocus />
-                  
-                  {pdfNameInput.trim().length > 0 ? (
+                  {(!showPdf.clientName && !showPdf.client) ? (
+                      <>
+                        <h3 className="text-xl font-black text-black dark:text-white mb-2">Print Template</h3>
+                        <p className="text-sm text-gray-500 mb-4">Enter a name to appear on the PDF.</p>
+                        <input type="text" value={pdfNameInput} onChange={e => setPdfNameInput(e.target.value)} placeholder="Client Name" className="w-full bg-gray-100 dark:bg-white/5 p-3 rounded-xl outline-none font-bold mb-4" autoFocus />
+                        <div className="flex gap-2">
+                            <button onClick={() => setShowPdf(null)} className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl font-bold text-gray-500">Cancel</button>
+                            <button 
+                                onClick={() => setShowPdf({ ...showPdf, clientName: pdfNameInput, client: { name: pdfNameInput } as Client })} 
+                                disabled={!pdfNameInput}
+                                className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold disabled:opacity-50"
+                            >
+                                Continue
+                            </button>
+                        </div>
+                      </>
+                  ) : (
                       <PlanPDF 
-                        client={{ name: pdfNameInput } as Client} 
+                        client={showPdf.client || { name: showPdf.clientName } as Client} 
                         type={showPdf.type} 
-                        dietData={showPdf.type === 'diet' ? showPdf.data : undefined} 
-                        workoutData={showPdf.type === 'workout' ? showPdf.data : undefined}
+                        dietData={showPdf.data ? (showPdf.type === 'diet' ? showPdf.data : undefined) : (showPdf.client?.dietPlan as DietMeal[])} 
+                        workoutData={showPdf.data ? (showPdf.type === 'workout' ? showPdf.data : undefined) : (showPdf.client?.workoutRoutine as WorkoutDay[])}
                         onClose={() => setShowPdf(null)} 
                       />
-                  ) : (
-                      <div className="flex gap-2">
-                          <button onClick={() => setShowPdf(null)} className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 rounded-xl font-bold text-gray-500">Cancel</button>
-                          <button disabled className="flex-1 py-3 bg-blue-600/50 text-white rounded-xl font-bold cursor-not-allowed">Generate</button>
-                      </div>
                   )}
               </div>
           </div>
