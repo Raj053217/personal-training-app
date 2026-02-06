@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Client, Session, SessionStatus } from '../types';
-import { format, isSameDay, addDays, startOfWeek, addWeeks, subWeeks, isToday } from 'date-fns';
-import { ChevronLeft, ChevronRight, CheckCircle, AlertCircle, XCircle, X, Calendar as CalendarIcon, Clock, Filter } from 'lucide-react';
+import { format, isSameDay, addDays, startOfWeek, addWeeks, subWeeks, isToday, parse } from 'date-fns';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, Filter, ChevronDown, Flame, FileText, LayoutGrid, List, Plus } from 'lucide-react';
 
 interface ScheduleProps {
   clients: Client[];
@@ -11,283 +11,186 @@ interface ScheduleProps {
 const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showAllStatus, setShowAllStatus] = useState(false); // Default to filtering for "Scheduled" only
+  const [showAllStatus, setShowAllStatus] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   
-  // Modal State
   const [activeSession, setActiveSession] = useState<{ session: Session; clientName: string; clientId: string } | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [sessionIntensity, setSessionIntensity] = useState(7);
+  const [sessionFeedback, setSessionFeedback] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
 
-  // Reset rescheduling state when modal opens/closes
   useEffect(() => {
     if (activeSession) {
       setNewDate(activeSession.session.date);
       setNewTime(activeSession.session.time);
+      setSessionIntensity(activeSession.session.intensity || 7);
+      setSessionFeedback(activeSession.session.feedback || '');
       setIsRescheduling(false);
+      setIsCompleting(false);
     }
   }, [activeSession]);
 
-  const getAllSessions = () => {
+  const allSessions = useMemo(() => {
     const all: { session: Session; clientName: string; clientId: string }[] = [];
     clients.forEach(client => {
       client.sessions.forEach(session => {
         all.push({ session, clientName: client.name, clientId: client.id });
       });
     });
-    return all.sort((a, b) => new Date(`${a.session.date}T${a.session.time}`).getTime() - new Date(`${b.session.date}T${b.session.time}`).getTime());
-  };
+    return all.sort((a, b) => a.session.time.localeCompare(b.session.time));
+  }, [clients]);
 
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(currentWeekStart, i));
   
-  // 1. Filter by Date
-  const daySessions = getAllSessions().filter(s => isSameDay(new Date(s.session.date), selectedDate));
-  
-  // 2. Filter by Status (User request: "see schedule session only")
-  const displayedSessions = showAllStatus 
-    ? daySessions 
-    : daySessions.filter(s => !s.session.status || s.session.status === 'scheduled');
-
-  const updateStatus = (status: SessionStatus) => {
+  const updateStatus = (status: SessionStatus, extraData?: { intensity?: number, feedback?: string }) => {
     if (!activeSession) return;
     const client = clients.find(c => c.id === activeSession.clientId);
     if (client) {
-        const updated = client.sessions.map(s => s.id === activeSession.session.id ? { ...s, status, completed: status === 'completed' } : s);
-        onUpdateClient({ ...client, sessions: updated });
-        setActiveSession(null);
-    }
-  };
-
-  const handleReschedule = () => {
-    if (!activeSession || !newDate || !newTime) return;
-    const client = clients.find(c => c.id === activeSession.clientId);
-    if (client) {
-        // Update date, time, and reset status to scheduled (remove completed/cancelled flags)
         const updated = client.sessions.map(s => s.id === activeSession.session.id ? { 
-            ...s, 
-            date: newDate, 
-            time: newTime, 
-            status: 'scheduled' as SessionStatus, 
-            completed: false 
+          ...s, status, completed: status === 'completed', intensity: extraData?.intensity, feedback: extraData?.feedback
         } : s);
         onUpdateClient({ ...client, sessions: updated });
         setActiveSession(null);
     }
   };
 
-  const getSessionStyles = (status?: SessionStatus) => {
-    switch (status) {
-      case 'completed':
-        return {
-          container: 'border-green-400 bg-green-50/90 dark:bg-green-900/20 border',
-          icon: <CheckCircle size={20} className="text-green-600 dark:text-green-500" fill="currentColor" stroke="white" strokeWidth={2.5} />,
-          text: 'text-green-900 dark:text-green-100',
-          metaText: 'text-green-700 dark:text-green-300',
-          badge: 'bg-green-200/50 text-green-800 dark:bg-green-800/50 dark:text-green-200',
-          opacity: ''
-        };
-      case 'missed':
-        return {
-          container: 'border-orange-400 bg-orange-50/90 dark:bg-orange-900/20 border',
-          icon: <AlertCircle size={20} className="text-orange-600 dark:text-orange-500" strokeWidth={2.5} />,
-          text: 'text-orange-900 dark:text-orange-100',
-          metaText: 'text-orange-700 dark:text-orange-300',
-          badge: 'bg-orange-200/50 text-orange-800 dark:bg-orange-800/50 dark:text-orange-200',
-          opacity: ''
-        };
-      case 'cancelled':
-        return {
-          container: 'border-red-400 bg-red-50/90 dark:bg-red-900/20 border',
-          icon: <XCircle size={20} className="text-red-600 dark:text-red-500" strokeWidth={2.5} />,
-          text: 'text-red-900 dark:text-red-100',
-          metaText: 'text-red-700 dark:text-red-300',
-          badge: 'bg-red-200/50 text-red-800 dark:bg-red-800/50 dark:text-red-200',
-          opacity: 'opacity-80 grayscale-[0.2]'
-        };
-      default:
-        return {
-          container: 'border-l-ios-blue bg-white dark:bg-ios-card-dark border-transparent border-l-[4px] shadow-sm',
-          icon: null,
-          text: 'text-black dark:text-white',
-          metaText: 'text-ios-gray',
-          badge: 'hidden',
-          opacity: ''
-        };
-    }
+  const renderGridView = () => {
+    const morningHours = Array.from({ length: 7 }, (_, i) => 5 + i); // 5 to 11
+    const eveningHours = Array.from({ length: 4 }, (_, i) => 17 + i); // 17 to 20
+
+    const GridSection = ({ title, hours, colorClass }: { title: string, hours: number[], colorClass: string }) => (
+        <div className="mb-6">
+            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 px-1 flex items-center gap-2">
+                <div className={`w-1.5 h-1.5 rounded-full ${colorClass}`}></div>
+                {title}
+            </h3>
+            <div className="bg-white dark:bg-[#1C1C1E] rounded-3xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 overflow-x-auto">
+                <div className="min-w-[750px]">
+                    <div className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-gray-50 dark:border-white/5 bg-gray-50/30 dark:bg-white/5">
+                        <div className="p-4 text-[10px] text-gray-400 font-black border-r border-gray-50 dark:border-white/5 uppercase">Time</div>
+                        {weekDays.map(day => (
+                            <div key={day.toString()} className={`p-4 text-center border-r border-gray-50 dark:border-white/5 last:border-0 ${isToday(day) ? 'bg-blue-500/10' : ''}`}>
+                                <p className="text-[10px] font-black text-gray-400 uppercase">{format(day, 'EEE')}</p>
+                                <p className={`text-[16px] font-black ${isToday(day) ? 'text-blue-500' : 'text-black dark:text-white'}`}>{format(day, 'd')}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="divide-y divide-gray-50 dark:divide-white/5">
+                        {hours.map(hour => (
+                            <div key={hour} className="grid grid-cols-[70px_repeat(7,1fr)] min-h-[70px]">
+                                <div className="p-3 text-[11px] font-black text-gray-400 border-r border-gray-50 dark:border-white/5 flex flex-col items-center justify-center bg-gray-50/20 dark:bg-white/5">
+                                    <span>{format(new Date().setHours(hour, 0), 'h a')}</span>
+                                </div>
+                                {weekDays.map(day => {
+                                    const dateStr = format(day, 'yyyy-MM-dd');
+                                    const sessions = allSessions.filter(s => {
+                                        const h = parseInt(s.session.time.split(':')[0]);
+                                        return s.session.date === dateStr && h === hour;
+                                    });
+                                    return (
+                                        <div key={day.toString()} className={`relative border-r border-gray-50 dark:border-white/5 p-1.5 last:border-0 ${isToday(day) ? 'bg-blue-500/5' : ''}`}>
+                                            <div className="flex flex-col gap-1">
+                                                {sessions.map((s, idx) => (
+                                                    <div key={idx} onClick={() => setActiveSession(s)} className={`text-[9px] font-black p-2 rounded-xl truncate cursor-pointer shadow-sm border border-transparent active:scale-95 transition-all
+                                                        ${s.session.status === 'completed' ? 'bg-green-500 text-white' : 
+                                                          s.session.status === 'cancelled' ? 'bg-gray-100 text-gray-400 opacity-50' : 
+                                                          'bg-blue-500 text-white shadow-lg shadow-blue-500/20'}
+                                                    `}>{s.clientName}</div>
+                                                ))}
+                                                {sessions.length === 0 && <div className="w-full h-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"><Plus size={14} className="text-gray-200" /></div>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="mt-4 pb-24 px-1">
+            <GridSection title="Morning (5:15 - 11 AM)" hours={morningHours} colorClass="bg-orange-500" />
+            <GridSection title="Evening (5:30 - 7:45 PM)" hours={eveningHours} colorClass="bg-indigo-500" />
+        </div>
+    );
   };
 
   return (
     <div className="h-full flex flex-col animate-fadeIn">
-       
-       {/* Large Title & Filter Toggle */}
-       <div className="pt-2 px-1 mb-4 flex justify-between items-end">
-         <h1 className="text-[34px] font-bold text-black dark:text-white leading-tight">Schedule</h1>
-         <button 
-           onClick={() => setShowAllStatus(!showAllStatus)}
-           className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${showAllStatus ? 'bg-ios-blue text-white' : 'bg-gray-200 dark:bg-gray-800 text-ios-gray'}`}
-         >
-            <Filter size={12} />
-            {showAllStatus ? 'All' : 'Scheduled Only'}
-         </button>
-      </div>
-
-       {/* Calendar Strip */}
-       <div className="bg-ios-card-light dark:bg-ios-card-dark shadow-sm pb-2 sticky top-0 z-10 mx-[-16px] px-[16px]">
-          <div className="flex justify-between items-center py-2 px-2">
-             <span className="text-[17px] font-semibold text-ios-red">{format(currentWeekStart, 'MMMM yyyy')}</span>
-             <div className="flex gap-4">
-                <button onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}><ChevronLeft size={22} className="text-ios-red" /></button>
-                <button onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}><ChevronRight size={22} className="text-ios-red" /></button>
-             </div>
-          </div>
-          <div className="flex justify-between mt-1">
-            {weekDays.map(day => {
-              const isSelected = isSameDay(day, selectedDate);
-              const isTodayDate = isToday(day);
-              return (
-                <button 
-                  key={day.toString()}
-                  onClick={() => setSelectedDate(day)}
-                  className={`flex flex-col items-center justify-center w-[45px] h-[60px] rounded-[10px] transition-all ${isSelected ? 'bg-ios-red shadow-md' : ''}`}
-                >
-                  <span className={`text-[11px] font-semibold uppercase mb-0.5 ${isSelected ? 'text-white' : 'text-ios-gray'}`}>{format(day, 'EEE')}</span>
-                  <div className={`text-[20px] font-medium w-8 h-8 flex items-center justify-center rounded-full ${isSelected ? 'text-white' : isTodayDate ? 'bg-ios-red text-white' : 'text-black dark:text-white'}`}>
-                    {format(day, 'd')}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+       <div className="pt-2 px-1 mb-2 flex justify-between items-center">
+         <h1 className="text-[34px] font-black text-black dark:text-white tracking-tight">Schedule</h1>
+         <div className="bg-gray-100 dark:bg-gray-800 p-0.5 rounded-xl flex">
+             <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500' : 'text-gray-400'}`}><List size={20}/></button>
+             <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500' : 'text-gray-400'}`}><LayoutGrid size={20}/></button>
+         </div>
        </div>
 
-       {/* Timeline List */}
-       <div className="flex-1 mt-4 space-y-3 pb-24">
-         {displayedSessions.length > 0 ? (
-           displayedSessions.map((item) => {
-             const styles = getSessionStyles(item.session.status);
-             return (
-               <div 
-                 key={item.session.id} 
-                 onClick={() => setActiveSession(item)}
-                 className={`flex gap-4 cursor-pointer group ${styles.opacity}`}
-               >
-                  {/* Time Column */}
-                  <div className="w-16 pt-1 text-right">
-                      <span className="text-[15px] font-semibold text-black dark:text-white block">{item.session.time}</span>
-                      <span className="text-[11px] text-ios-gray font-medium uppercase">{parseInt(item.session.time) >= 12 ? 'PM' : 'AM'}</span>
-                  </div>
+       <div className="px-1 mb-4 flex gap-3">
+          <div className="relative flex-1">
+              <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full appearance-none bg-ios-card-light dark:bg-ios-card-dark text-black dark:text-white py-2.5 pl-4 pr-10 rounded-2xl text-sm font-bold shadow-sm outline-none border border-transparent focus:border-ios-blue transition-all">
+                  <option value="all">All Clients</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
+          <button onClick={() => setShowAllStatus(!showAllStatus)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm ${showAllStatus ? 'bg-ios-blue text-white' : 'bg-ios-card-light dark:bg-ios-card-dark text-ios-gray'}`}>
+             <Filter size={14} /> {showAllStatus ? 'All' : 'Active'}
+          </button>
+       </div>
 
-                  {/* Card */}
-                  <div className={`flex-1 p-3.5 rounded-[16px] relative overflow-hidden active:scale-[0.99] transition-all duration-200 ${styles.container}`}>
-                      <div className="pr-8">
-                        <h3 className={`text-[17px] font-bold leading-snug ${styles.text}`}>{item.clientName}</h3>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <Clock size={13} className={styles.metaText} />
-                          <p className={`text-[13px] font-medium ${styles.metaText}`}>Personal Training</p>
-                        </div>
+       <div className="flex-1 space-y-3">
+         {viewMode === 'grid' ? renderGridView() : (
+             <div className="mt-4 px-1 pb-24 space-y-4">
+                 {allSessions.filter(s => isSameDay(new Date(s.session.date), selectedDate)).map((item) => (
+                   <div key={item.session.id} onClick={() => setActiveSession(item)} className="flex gap-4 cursor-pointer animate-slideUp">
+                      <div className="w-16 text-right font-black">
+                          <span className="text-sm text-black dark:text-white block">{item.session.time.split('-')[0]}</span>
+                          <span className="text-[10px] text-gray-400 uppercase">{parseInt(item.session.time.split(':')[0]) >= 12 ? 'PM' : 'AM'}</span>
                       </div>
-                      
-                      {/* Status Indicators */}
-                      <div className="absolute top-3.5 right-3.5 flex flex-col items-end gap-1">
-                          {styles.icon}
-                          {item.session.status && item.session.status !== 'scheduled' && (
-                             <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full mt-1 ${styles.badge}`}>
-                               {item.session.status}
-                             </span>
-                          )}
+                      <div className={`flex-1 p-4 rounded-3xl bg-white dark:bg-ios-card-dark shadow-sm border-l-8 ${item.session.status === 'completed' ? 'border-green-500' : 'border-blue-500'}`}>
+                          <h3 className="text-lg font-black text-black dark:text-white">{item.clientName}</h3>
+                          <p className="text-xs text-gray-400 font-bold">Personal Training Session</p>
                       </div>
-                  </div>
-               </div>
-             );
-           })
-         ) : (
-           <div className="flex flex-col items-center justify-center py-20 text-ios-gray">
-             <CalendarIcon size={48} strokeWidth={1} className="mb-4 opacity-20" />
-             <p className="text-[17px] font-medium">No Sessions</p>
-             {!showAllStatus && daySessions.length > 0 && (
-                <button onClick={() => setShowAllStatus(true)} className="mt-2 text-sm text-ios-blue font-medium">
-                    Show {daySessions.length} hidden
-                </button>
-             )}
-           </div>
+                   </div>
+                 ))}
+             </div>
          )}
        </div>
 
-       {/* Action Modal */}
        {activeSession && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 backdrop-blur-sm p-4 animate-fadeIn">
-             <div className="bg-ios-card-light dark:bg-ios-card-dark w-full max-w-sm rounded-[14px] overflow-hidden shadow-2xl animate-slideUp">
-                <div className="p-4 border-b border-ios-separator-light dark:border-ios-separator-dark flex justify-between items-center">
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+             <div className="bg-white dark:bg-[#1C1C1E] w-full max-w-sm rounded-[40px] overflow-hidden shadow-2xl animate-slideUp">
+                <div className="p-8 border-b border-gray-50 dark:border-white/5 flex justify-between items-center">
                     <div>
-                      <span className="font-semibold block text-black dark:text-white">
-                        {isRescheduling ? 'Reschedule Session' : 'Manage Session'}
-                      </span>
-                      <span className="text-xs text-ios-gray">{activeSession.clientName} • {activeSession.session.time}</span>
+                      <span className="font-black text-2xl block text-black dark:text-white uppercase tracking-tight">{activeSession.clientName}</span>
+                      <span className="text-xs font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full">{activeSession.session.time}</span>
                     </div>
-                    <button onClick={() => setActiveSession(null)} className="p-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-ios-gray"><X size={16}/></button>
+                    <button onClick={() => setActiveSession(null)} className="p-2 bg-gray-100 dark:bg-white/5 rounded-full text-gray-400"><X size={24}/></button>
                 </div>
-                
-                <div className="p-4 space-y-2">
-                    {!isRescheduling ? (
-                        /* Standard Actions */
-                        <>
-                            <button onClick={() => updateStatus('completed')} className="w-full py-3.5 rounded-[12px] bg-ios-green text-white font-semibold text-[17px] active:scale-[0.98] transition shadow-sm flex items-center justify-center gap-2">
-                                <CheckCircle size={20} fill="currentColor" stroke="white" /> Mark Completed
-                            </button>
-                            
-                            <button onClick={() => updateStatus('missed')} className="w-full py-3.5 rounded-[12px] bg-ios-orange text-white font-semibold text-[17px] active:scale-[0.98] transition shadow-sm flex items-center justify-center gap-2">
-                                <AlertCircle size={20} /> Mark Missed
-                            </button>
-                            
-                            <button onClick={() => setIsRescheduling(true)} className="w-full py-3.5 rounded-[12px] bg-ios-blue text-white font-semibold text-[17px] active:scale-[0.98] transition shadow-sm flex items-center justify-center gap-2">
-                                <CalendarIcon size={20} /> Reschedule / Cancel
-                            </button>
-
-                            {activeSession.session.status && activeSession.session.status !== 'scheduled' && (
-                                <button onClick={() => updateStatus('scheduled')} className="w-full py-3.5 rounded-[12px] bg-ios-gray5 dark:bg-[#3A3A3C] text-black dark:text-white font-semibold text-[17px] mt-2 active:scale-[0.98] transition">
-                                    Reset to Scheduled
-                                </button>
-                            )}
-                        </>
-                    ) : (
-                        /* Reschedule Workflow */
-                        <div className="space-y-4">
-                            <p className="text-center text-sm text-gray-500 mb-2">Change date or cancel permanently?</p>
-                            
-                            <div className="bg-white dark:bg-[#2C2C2E] p-3 rounded-xl space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-sm font-medium">New Date</label>
-                                    <input 
-                                        type="date" 
-                                        value={newDate} 
-                                        onChange={(e) => setNewDate(e.target.value)} 
-                                        className="bg-gray-100 dark:bg-black rounded-lg px-3 py-2 text-right"
-                                    />
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <label className="text-sm font-medium">New Time</label>
-                                    <input 
-                                        type="time" 
-                                        value={newTime} 
-                                        onChange={(e) => setNewTime(e.target.value)} 
-                                        className="bg-gray-100 dark:bg-black rounded-lg px-3 py-2 text-right"
-                                    />
-                                </div>
+                <div className="p-8 space-y-3">
+                    {isCompleting ? (
+                        <div className="space-y-6">
+                            <div>
+                                <label className="text-xs font-black uppercase text-gray-400 mb-2 block">Intensity (RPE)</label>
+                                <input type="range" min="1" max="10" step="1" value={sessionIntensity} onChange={(e) => setSessionIntensity(parseInt(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                                <div className="flex justify-between text-[10px] font-black mt-2 text-gray-500"><span>EASY</span><span>MODERATE</span><span>HARD</span></div>
                             </div>
-
-                            <button onClick={handleReschedule} className="w-full py-3.5 rounded-[12px] bg-ios-blue text-white font-semibold text-[17px] active:scale-[0.98] transition shadow-sm">
-                                Confirm Reschedule
-                            </button>
-
-                            <div className="flex gap-2">
-                                <button onClick={() => setIsRescheduling(false)} className="flex-1 py-3.5 rounded-[12px] bg-gray-200 dark:bg-gray-700 text-black dark:text-white font-semibold text-[17px]">
-                                    Back
-                                </button>
-                                <button onClick={() => updateStatus('cancelled')} className="flex-1 py-3.5 rounded-[12px] bg-ios-red text-white font-semibold text-[17px] active:scale-[0.98] transition shadow-sm">
-                                    Cancel Session
-                                </button>
-                            </div>
+                            <textarea value={sessionFeedback} onChange={(e) => setSessionFeedback(e.target.value)} placeholder="Notes for Raj..." className="w-full bg-gray-50 dark:bg-black/40 rounded-3xl p-5 text-sm outline-none h-32 resize-none" />
+                            <button onClick={() => updateStatus('completed', { intensity: sessionIntensity, feedback: sessionFeedback })} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition">COMPLETE</button>
                         </div>
+                    ) : (
+                        <>
+                            <button onClick={() => setIsCompleting(true)} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition">FINISH SESSION</button>
+                            <button onClick={() => updateStatus('missed')} className="w-full py-5 rounded-3xl bg-orange-500 text-white font-black text-lg active:scale-95 transition">MARK AS MISSED</button>
+                            <button onClick={() => updateStatus('cancelled')} className="w-full py-5 rounded-3xl bg-red-500 text-white font-black text-lg active:scale-95 transition">CANCEL</button>
+                        </>
                     )}
                 </div>
              </div>

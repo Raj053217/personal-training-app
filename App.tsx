@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Client, NavPage } from './types';
 import { saveClients, getInitialData, saveClientsToCloud, loadClientsFromCloud } from './services/storage';
-import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, Plus, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, Plus, Loader2, BookOpen } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import ClientList from './components/ClientList';
 import ClientForm from './components/ClientForm';
 import Schedule from './components/Schedule';
 import Settings from './components/Settings';
+import PlanManager from './components/PlanManager';
 import { useAuth } from './contexts/AuthContext';
 
 const App: React.FC = () => {
@@ -17,6 +18,39 @@ const App: React.FC = () => {
   const [editingClient, setEditingClient] = useState<Client | undefined>(undefined);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currency, setCurrency] = useState('₹');
+
+  // History State for Undo/Redo
+  const [history, setHistory] = useState<Client[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // Helper to update clients and push to history
+  const updateClients = (newClients: Client[], addToHistory = true) => {
+    setClients(newClients);
+    if (addToHistory) {
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(newClients);
+        // Limit history size to 50 to prevent memory issues
+        if (newHistory.length > 50) newHistory.shift();
+        setHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+    }
+  };
+
+  const undo = () => {
+    if (historyIndex > 0) {
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setClients(history[newIndex]);
+    }
+  };
+
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+        const newIndex = historyIndex + 1;
+        setHistoryIndex(newIndex);
+        setClients(history[newIndex]);
+    }
+  };
 
   // Theme & Currency Initialization
   useEffect(() => {
@@ -49,23 +83,31 @@ const App: React.FC = () => {
   useEffect(() => {
     const initData = async () => {
         setDataLoading(true);
+        let initialClients: Client[] = [];
+
         if (user) {
             // Logged in: Try fetching from cloud
             const cloudData = await loadClientsFromCloud(user.uid);
             if (cloudData) {
-                setClients(cloudData);
+                initialClients = cloudData;
             } else {
                 // First time login or empty cloud: Use local data and sync it up
                 const localData = getInitialData();
-                setClients(localData);
+                initialClients = localData;
                 if (localData.length > 0) {
                     await saveClientsToCloud(user.uid, localData);
                 }
             }
         } else {
             // Guest: Load from local storage
-            setClients(getInitialData());
+            initialClients = getInitialData();
         }
+        
+        setClients(initialClients);
+        // Initialize history
+        setHistory([initialClients]);
+        setHistoryIndex(0);
+        
         setDataLoading(false);
     };
 
@@ -110,10 +152,26 @@ const App: React.FC = () => {
   }, [clients]);
 
   const handleSaveClient = (client: Client) => {
-    if (editingClient) setClients(clients.map(c => c.id === client.id ? client : c));
-    else setClients([...clients, client]);
+    const exists = clients.some(c => c.id === client.id);
+    let newClients;
+    
+    if (exists) {
+        newClients = clients.map(c => c.id === client.id ? client : c);
+    } else {
+        newClients = [...clients, client];
+    }
+    
+    updateClients(newClients);
     setEditingClient(undefined);
-    setCurrentPage(NavPage.CLIENTS);
+    
+    if (currentPage === NavPage.ADD_CLIENT) {
+        setCurrentPage(NavPage.CLIENTS);
+    }
+  };
+
+  const handleDeleteClient = (id: string) => {
+      const newClients = clients.filter(c => c.id !== id);
+      updateClients(newClients);
   };
 
   const startAdd = () => {
@@ -148,9 +206,30 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className={`w-full max-w-2xl mx-auto pb-24 px-4 safe-top pt-8 safe-bottom min-h-screen`}>
         {currentPage === NavPage.DASHBOARD && <Dashboard clients={clients} navigateTo={setCurrentPage} currency={currency} />}
-        {currentPage === NavPage.CLIENTS && <ClientList clients={clients} onEdit={(c) => { setEditingClient(c); setCurrentPage(NavPage.ADD_CLIENT); }} onDelete={(id) => setClients(clients.filter(c => c.id !== id))} onAdd={startAdd} currency={currency} />}
+        {currentPage === NavPage.CLIENTS && (
+            <ClientList 
+                clients={clients} 
+                onEdit={(c) => { setEditingClient(c); setCurrentPage(NavPage.ADD_CLIENT); }} 
+                onDelete={handleDeleteClient} 
+                onAdd={startAdd} 
+                currency={currency} 
+            />
+        )}
+        {currentPage === NavPage.PLANS && <PlanManager clients={clients} onUpdateClient={handleSaveClient} />}
         {currentPage === NavPage.SCHEDULE && <Schedule clients={clients} onUpdateClient={handleSaveClient} />}
-        {currentPage === NavPage.SETTINGS && <Settings isDarkMode={isDarkMode} toggleTheme={() => setIsDarkMode(!isDarkMode)} currency={currency} setCurrency={setCurrency} onRestore={(d) => { setClients(d); saveClients(d); alert('Restored'); }} />}
+        {currentPage === NavPage.SETTINGS && (
+            <Settings 
+                isDarkMode={isDarkMode} 
+                toggleTheme={() => setIsDarkMode(!isDarkMode)} 
+                currency={currency} 
+                setCurrency={setCurrency} 
+                onRestore={(d) => updateClients(d)}
+                undo={undo}
+                redo={redo}
+                canUndo={historyIndex > 0}
+                canRedo={historyIndex < history.length - 1}
+            />
+        )}
         
         {currentPage === NavPage.ADD_CLIENT && (
           <ClientForm 
@@ -166,7 +245,8 @@ const App: React.FC = () => {
       {currentPage !== NavPage.ADD_CLIENT && (
         <nav className="fixed bottom-0 w-full z-40 ios-blur border-t border-ios-separator-light/50 dark:border-ios-separator-dark/50 pb-safe safe-bottom no-print">
           <div className="flex justify-around items-center h-[50px] max-w-2xl mx-auto pt-1">
-            <TabButton page={NavPage.DASHBOARD} icon={LayoutDashboard} label="Summary" />
+            <TabButton page={NavPage.DASHBOARD} icon={LayoutDashboard} label="Home" />
+            <TabButton page={NavPage.PLANS} icon={BookOpen} label="Plans" />
             <TabButton page={NavPage.SCHEDULE} icon={Calendar} label="Schedule" />
             <TabButton page={NavPage.CLIENTS} icon={Users} label="Clients" />
             <TabButton page={NavPage.SETTINGS} icon={SettingsIcon} label="Settings" />

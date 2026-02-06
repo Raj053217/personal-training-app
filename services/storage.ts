@@ -1,10 +1,11 @@
-import { Client } from '../types';
+import { Client, PlanTemplate } from '../types';
 import { db } from './firebase';
 import { doc, setDoc, getDoc } from "firebase/firestore";
 
 const STORAGE_KEY = 'pt_manage_pro_data';
+const TEMPLATE_KEY = 'pt_manage_pro_templates';
 
-// --- Local Storage (Offline/Guest) ---
+// --- Local Storage (Clients) ---
 
 export const saveClients = (clients: Client[]) => {
   try {
@@ -29,6 +30,26 @@ export const loadClients = (): Client[] => {
 export const getInitialData = (): Client[] => {
   const existing = loadClients();
   if (existing.length > 0) return existing;
+  return [];
+};
+
+// --- Local Storage (Templates) ---
+
+export const saveTemplates = (templates: PlanTemplate[]) => {
+  try {
+    localStorage.setItem(TEMPLATE_KEY, JSON.stringify(templates));
+  } catch (e) {
+    console.error("Failed to save templates", e);
+  }
+};
+
+export const loadTemplates = (): PlanTemplate[] => {
+  try {
+    const data = localStorage.getItem(TEMPLATE_KEY);
+    if (data) return JSON.parse(data);
+  } catch (e) {
+    console.error("Failed to load templates", e);
+  }
   return [];
 };
 

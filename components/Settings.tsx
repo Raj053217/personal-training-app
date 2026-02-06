@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Moon, Sun, DollarSign, ChevronRight, Smartphone, Upload, Download, Bell, LogOut, User } from 'lucide-react';
+import { Moon, Sun, DollarSign, ChevronRight, Smartphone, Upload, Download, Bell, LogOut, User, RotateCcw, RotateCw } from 'lucide-react';
 import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -9,9 +9,13 @@ interface SettingsProps {
   currency: string;
   setCurrency: (currency: string) => void;
   onRestore: (data: Client[]) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
-const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, setCurrency, onRestore }) => {
+const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, setCurrency, onRestore, undo, redo, canUndo, canRedo }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { user, login, logout } = useAuth();
@@ -78,7 +82,8 @@ const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, 
     isToggle = false,
     toggleValue = false,
     iconColor = "bg-ios-blue",
-    customContent
+    customContent,
+    disabled = false
   }: { 
     icon: any, 
     label: string, 
@@ -87,11 +92,12 @@ const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, 
     isToggle?: boolean,
     toggleValue?: boolean,
     iconColor?: string,
-    customContent?: React.ReactNode
+    customContent?: React.ReactNode,
+    disabled?: boolean
   }) => (
     <div 
-      onClick={!isToggle ? onClick : undefined}
-      className="flex items-center justify-between p-3.5 pl-4 bg-ios-card-light dark:bg-ios-card-dark active:bg-[#E5E5EA] dark:active:bg-[#2C2C2E] cursor-pointer transition-colors"
+      onClick={!isToggle && !disabled ? onClick : undefined}
+      className={`flex items-center justify-between p-3.5 pl-4 bg-ios-card-light dark:bg-ios-card-dark transition-colors ${!disabled ? 'active:bg-[#E5E5EA] dark:active:bg-[#2C2C2E] cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
     >
       <div className="flex items-center gap-3">
         <div className={`w-7 h-7 rounded-[7px] ${iconColor} flex items-center justify-center text-white`}>
@@ -174,6 +180,29 @@ const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, 
             {user ? "Your data is backed up to the cloud." : "Sign in to sync your data across devices."}
          </p>
       </div>
+      
+      {/* Edit History */}
+      <div>
+         <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Edit History</h3>
+         <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
+            <SettingItem 
+              icon={RotateCcw} 
+              label="Undo Last Change" 
+              onClick={undo}
+              disabled={!canUndo}
+              iconColor={canUndo ? "bg-ios-orange" : "bg-gray-400"}
+              value={canUndo ? "" : "Nothing to undo"}
+            />
+            <SettingItem 
+              icon={RotateCw} 
+              label="Redo Change" 
+              onClick={redo}
+              disabled={!canRedo}
+              iconColor={canRedo ? "bg-ios-orange" : "bg-gray-400"}
+              value={canRedo ? "" : "Nothing to redo"}
+            />
+         </div>
+      </div>
 
       {/* Group 1 */}
       <div>
@@ -230,7 +259,7 @@ const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, 
           <SettingItem 
             icon={Smartphone} 
             label="Version" 
-            value="2.1.0"
+            value="2.2.0"
             onClick={() => {}}
             iconColor="bg-gray-500"
           />

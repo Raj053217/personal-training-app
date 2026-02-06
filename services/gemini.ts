@@ -1,6 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 import { Client } from '../types';
 
+interface ScheduleContext {
+  utilizationRate: number;
+  morningOpenings: number;
+  eveningOpenings: number;
+  busiestDay: string;
+  freeHoursNext7Days: number;
+  avgSessionDuration: number;
+}
+
 // Helper to calculate anonymous stats to send to AI
 const getAnonymousStats = (clients: Client[]) => {
   const now = new Date();
@@ -18,7 +27,7 @@ const getAnonymousStats = (clients: Client[]) => {
   };
 };
 
-export const generateBusinessInsight = async (clients: Client[]): Promise<string> => {
+export const generateBusinessInsight = async (clients: Client[], scheduleContext?: ScheduleContext): Promise<string> => {
   try {
     if (!process.env.API_KEY) {
       return "Please configure your API Key to receive business insights.";
@@ -27,21 +36,46 @@ export const generateBusinessInsight = async (clients: Client[]): Promise<string
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const stats = getAnonymousStats(clients);
     
-    const prompt = `
-      Act as a high-performance business coach for a Personal Trainer.
-      Here are the current business stats:
-      - Active Clients: ${stats.activeClients}
-      - Total Revenue (Lifetime): $${stats.totalRevenue}
-      - Outstanding/Due Fees: $${stats.outstanding}
-      - Total Sessions Booked: ${stats.totalSessions}
+    let prompt = `
+      Act as an expert Personal Training Business & Productivity Coach.
+      Analyze the following business data and provide specific, actionable advice (max 120 words).
 
-      Provide a short, motivating, and strategic paragraph (max 100 words) on how to improve this business. 
-      Focus on either client retention, collecting fees, or filling the schedule based on the numbers.
+      FINANCIAL HEALTH:
+      - Active Clients: ${stats.activeClients}
+      - Total Revenue: $${stats.totalRevenue}
+      - Outstanding Fees: $${stats.outstanding}
     `;
+
+    if (scheduleContext) {
+      prompt += `
+      
+      SCHEDULE & CAPACITY (Next 7 Days):
+      - Weekly Utilization: ${scheduleContext.utilizationRate}% full.
+      - Total Free Hours: ${scheduleContext.freeHoursNext7Days.toFixed(1)} hours available.
+      - Morning Gaps (Slots): ${scheduleContext.morningOpenings} available.
+      - Evening Gaps (Slots): ${scheduleContext.eveningOpenings} available.
+      - Busiest Day: ${scheduleContext.busiestDay}.
+      - Avg Session Length: ${scheduleContext.avgSessionDuration} mins.
+
+      CRITICAL TASK:
+      Based on the SCHEDULE data, tell me exactly:
+      1. How many more clients I can realistically take on right now?
+      2. Suggestions on how to structure the timing (e.g., "Focus on filling Mon/Wed mornings").
+      3. If utilization is high (>80%), suggest a price increase or group sessions.
+      4. If utilization is low (<40%), suggest a specific promo based on the time of day (Morning/Evening) that is empty.
+      `;
+    } else {
+      prompt += `
+      Focus on general retention and revenue collection strategies.
+      `;
+    }
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
+      config: {
+        temperature: 0.7,
+      }
     });
 
     return response.text || "Could not generate insights at this time.";
