@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Client, Session, SessionStatus } from '../types';
-import { format, isSameDay, addDays, startOfWeek, addWeeks, subWeeks, isToday, parse } from 'date-fns';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, Filter, ChevronDown, Flame, FileText, LayoutGrid, List, Plus } from 'lucide-react';
+import { format, isSameDay, addDays, startOfWeek, addWeeks, subWeeks, isToday, parse, isBefore } from 'date-fns';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, Filter, ChevronDown, Flame, FileText, LayoutGrid, List, Plus, ArrowRight, RefreshCw } from 'lucide-react';
 
 interface ScheduleProps {
   clients: Client[];
@@ -11,7 +12,7 @@ interface ScheduleProps {
 const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showAllStatus, setShowAllStatus] = useState(false);
+  const [showHistory, setShowHistory] = useState(false); // Default false: Hide completed
   const [selectedClientId, setSelectedClientId] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   
@@ -58,6 +59,31 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
     }
   };
 
+  const handleReschedule = () => {
+      if (!activeSession || !newDate || !newTime) return;
+      const client = clients.find(c => c.id === activeSession.clientId);
+      if (client) {
+          const updated = client.sessions.map(s => s.id === activeSession.session.id ? {
+              ...s, date: newDate, time: newTime, status: 'scheduled' as SessionStatus, completed: false
+          } : s);
+          onUpdateClient({ ...client, sessions: updated });
+          setActiveSession(null);
+      }
+  };
+
+  // Filtering Logic: Hide completed/cancelled unless showHistory is true
+  const isSessionVisible = (s: Session) => {
+      if (selectedClientId !== 'all') {
+           const client = clients.find(c => c.id === selectedClientId);
+           if (!client || !client.sessions.find(cs => cs.id === s.id)) return false;
+      }
+
+      if (showHistory) return true; // Show all
+      
+      // Default: Hide completed and cancelled
+      return s.status !== 'completed' && !s.completed && s.status !== 'cancelled';
+  };
+
   const renderGridView = () => {
     const morningHours = Array.from({ length: 7 }, (_, i) => 5 + i); // 5 to 11
     const eveningHours = Array.from({ length: 4 }, (_, i) => 17 + i); // 17 to 20
@@ -89,7 +115,7 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
                                     const dateStr = format(day, 'yyyy-MM-dd');
                                     const sessions = allSessions.filter(s => {
                                         const h = parseInt(s.session.time.split(':')[0]);
-                                        return s.session.date === dateStr && h === hour;
+                                        return s.session.date === dateStr && h === hour && isSessionVisible(s.session);
                                     });
                                     return (
                                         <div key={day.toString()} className={`relative border-r border-gray-50 dark:border-white/5 p-1.5 last:border-0 ${isToday(day) ? 'bg-blue-500/5' : ''}`}>
@@ -98,8 +124,11 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
                                                     <div key={idx} onClick={() => setActiveSession(s)} className={`text-[9px] font-black p-2 rounded-xl truncate cursor-pointer shadow-sm border border-transparent active:scale-95 transition-all
                                                         ${s.session.status === 'completed' ? 'bg-green-500 text-white' : 
                                                           s.session.status === 'cancelled' ? 'bg-gray-100 text-gray-400 opacity-50' : 
+                                                          isBefore(new Date(s.session.date + 'T' + s.session.time), new Date()) ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' :
                                                           'bg-blue-500 text-white shadow-lg shadow-blue-500/20'}
-                                                    `}>{s.clientName}</div>
+                                                    `}>
+                                                        {s.clientName}
+                                                    </div>
                                                 ))}
                                                 {sessions.length === 0 && <div className="w-full h-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"><Plus size={14} className="text-gray-200" /></div>}
                                             </div>
@@ -126,9 +155,25 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
     <div className="h-full flex flex-col animate-fadeIn">
        <div className="pt-2 px-1 mb-2 flex justify-between items-center">
          <h1 className="text-[34px] font-black text-black dark:text-white tracking-tight">Schedule</h1>
-         <div className="bg-gray-100 dark:bg-gray-800 p-0.5 rounded-xl flex">
-             <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500' : 'text-gray-400'}`}><List size={20}/></button>
-             <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500' : 'text-gray-400'}`}><LayoutGrid size={20}/></button>
+         
+         <div className="flex items-center gap-3">
+             {/* Week Navigation */}
+             <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-0.5">
+                <button onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))} className="p-2 hover:bg-white dark:hover:bg-[#2C2C2E] rounded-lg transition-colors text-gray-500 dark:text-gray-400">
+                    <ChevronLeft size={18} />
+                </button>
+                <span className="text-[10px] font-black uppercase w-20 text-center text-gray-500 dark:text-gray-400">
+                    {format(currentWeekStart, 'MMM d')} - {format(addDays(currentWeekStart, 6), 'd')}
+                </span>
+                <button onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} className="p-2 hover:bg-white dark:hover:bg-[#2C2C2E] rounded-lg transition-colors text-gray-500 dark:text-gray-400">
+                    <ChevronRight size={18} />
+                </button>
+             </div>
+
+             <div className="bg-gray-100 dark:bg-gray-800 p-0.5 rounded-xl flex">
+                 <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500' : 'text-gray-400'}`}><List size={20}/></button>
+                 <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500' : 'text-gray-400'}`}><LayoutGrid size={20}/></button>
+             </div>
          </div>
        </div>
 
@@ -140,15 +185,26 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
               </select>
               <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
           </div>
-          <button onClick={() => setShowAllStatus(!showAllStatus)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm ${showAllStatus ? 'bg-ios-blue text-white' : 'bg-ios-card-light dark:bg-ios-card-dark text-ios-gray'}`}>
-             <Filter size={14} /> {showAllStatus ? 'All' : 'Active'}
+          <button onClick={() => setShowHistory(!showHistory)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm ${showHistory ? 'bg-ios-blue text-white' : 'bg-ios-card-light dark:bg-ios-card-dark text-ios-gray'}`}>
+             <Filter size={14} /> {showHistory ? 'History' : 'To-Do'}
           </button>
        </div>
 
        <div className="flex-1 space-y-3">
          {viewMode === 'grid' ? renderGridView() : (
              <div className="mt-4 px-1 pb-24 space-y-4">
-                 {allSessions.filter(s => isSameDay(new Date(s.session.date), selectedDate)).map((item) => (
+                 {/* In List Mode, showing selected Date which defaults to today. Ideally List Mode should also scroll or show range, but keeping simple for now */}
+                 <div className="flex justify-between items-center px-2 mb-2">
+                    <button onClick={() => setSelectedDate(addDays(selectedDate, -1))}><ChevronLeft className="text-gray-400"/></button>
+                    <span className="font-black text-lg">{format(selectedDate, 'EEEE, MMM do')}</span>
+                    <button onClick={() => setSelectedDate(addDays(selectedDate, 1))}><ChevronRight className="text-gray-400"/></button>
+                 </div>
+                 
+                 {allSessions.filter(s => isSameDay(new Date(s.session.date), selectedDate) && isSessionVisible(s.session)).length === 0 && (
+                     <div className="text-center py-10 text-gray-400 italic text-sm">No active sessions for this day.</div>
+                 )}
+
+                 {allSessions.filter(s => isSameDay(new Date(s.session.date), selectedDate) && isSessionVisible(s.session)).map((item) => (
                    <div key={item.session.id} onClick={() => setActiveSession(item)} className="flex gap-4 cursor-pointer animate-slideUp">
                       <div className="w-16 text-right font-black">
                           <span className="text-sm text-black dark:text-white block">{item.session.time.split('-')[0]}</span>
@@ -185,11 +241,31 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
                             <textarea value={sessionFeedback} onChange={(e) => setSessionFeedback(e.target.value)} placeholder="Notes for Raj..." className="w-full bg-gray-50 dark:bg-black/40 rounded-3xl p-5 text-sm outline-none h-32 resize-none" />
                             <button onClick={() => updateStatus('completed', { intensity: sessionIntensity, feedback: sessionFeedback })} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition">COMPLETE</button>
                         </div>
+                    ) : isRescheduling ? (
+                        <div className="space-y-6">
+                             <div>
+                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">New Date</label>
+                                 <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full bg-gray-100 dark:bg-white/5 p-4 rounded-2xl outline-none font-bold text-black dark:text-white" />
+                             </div>
+                             <div>
+                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">New Time</label>
+                                 <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} className="w-full bg-gray-100 dark:bg-white/5 p-4 rounded-2xl outline-none font-bold text-black dark:text-white" />
+                             </div>
+                             <button onClick={handleReschedule} className="w-full py-5 rounded-3xl bg-blue-500 text-white font-black text-lg active:scale-95 transition flex items-center justify-center gap-2">
+                                <RefreshCw size={20} /> UPDATE SCHEDULE
+                             </button>
+                             <button onClick={() => setIsRescheduling(false)} className="w-full py-3 text-gray-400 font-bold text-xs uppercase">Cancel</button>
+                        </div>
                     ) : (
                         <>
-                            <button onClick={() => setIsCompleting(true)} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition">FINISH SESSION</button>
-                            <button onClick={() => updateStatus('missed')} className="w-full py-5 rounded-3xl bg-orange-500 text-white font-black text-lg active:scale-95 transition">MARK AS MISSED</button>
-                            <button onClick={() => updateStatus('cancelled')} className="w-full py-5 rounded-3xl bg-red-500 text-white font-black text-lg active:scale-95 transition">CANCEL</button>
+                            <button onClick={() => setIsCompleting(true)} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition shadow-lg shadow-green-500/20">FINISH SESSION</button>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => setIsRescheduling(true)} className="py-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-black text-sm active:scale-95 transition">RESCHEDULE</button>
+                                <button onClick={() => updateStatus('missed')} className="py-4 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 font-black text-sm active:scale-95 transition">MISSED</button>
+                            </div>
+                            
+                            <button onClick={() => updateStatus('cancelled')} className="w-full py-4 rounded-2xl bg-gray-100 dark:bg-white/5 text-gray-500 font-black text-sm active:scale-95 transition">CANCEL SESSION</button>
                         </>
                     )}
                 </div>
