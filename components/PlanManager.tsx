@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Client, PlanTemplate, DietMeal, WorkoutDay, FoodItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Search, Plus, Trash2, FileText, Download, ChevronRight, Save, ArrowLeft, Copy, Printer, Eye, X, Utensils, Book } from 'lucide-react';
+import { Search, Plus, Trash2, FileText, Download, ChevronRight, Save, ArrowLeft, Copy, Printer, Eye, X, Utensils, Book, Filter } from 'lucide-react';
 import PlanBuilder from './PlanBuilder';
 import PlanPDF from './PlanPDF';
 import { saveTemplates, loadTemplates, saveFoodLibrary, loadFoodLibrary } from '../services/storage';
@@ -12,6 +12,8 @@ interface PlanManagerProps {
   onUpdateClient: (client: Client) => void;
   viewingClient?: Client; // Client Mode prop
 }
+
+const FOOD_CATEGORIES = ['Proteins', 'Carbs', 'Fats', 'Fruits', 'Vegetables', 'Dairy', 'Snacks', 'Beverages', 'Other'];
 
 const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, viewingClient }) => {
   // If viewingClient is present, default to 'clients' tab (which we will repurpose as 'My Plan')
@@ -27,8 +29,9 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
   const [templateName, setTemplateName] = useState('');
 
   // Food Library Inputs
-  const [newFood, setNewFood] = useState<FoodItem>({ id: '', name: '', servingSize: '', calories: '', protein: '', carbs: '', fats: '' });
+  const [newFood, setNewFood] = useState<FoodItem>({ id: '', name: '', servingSize: '', calories: '', protein: '', carbs: '', fats: '', category: 'Proteins' });
   const [showAddFood, setShowAddFood] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string>('All');
 
   // Save as Template Modal
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
@@ -49,11 +52,11 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
   // --- Food Library Logic ---
   const handleAddFood = () => {
     if (!newFood.name || !newFood.calories) return alert("Name and Calories are required");
-    const item: FoodItem = { ...newFood, id: uuidv4() };
+    const item: FoodItem = { ...newFood, id: uuidv4(), category: newFood.category || 'Other' };
     const updated = [...foodLibrary, item];
     setFoodLibrary(updated);
     saveFoodLibrary(updated);
-    setNewFood({ id: '', name: '', servingSize: '', calories: '', protein: '', carbs: '', fats: '' });
+    setNewFood({ id: '', name: '', servingSize: '', calories: '', protein: '', carbs: '', fats: '', category: 'Proteins' });
     setShowAddFood(false);
   };
 
@@ -304,20 +307,41 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
       {/* --- FOOD LIBRARY TAB --- */}
       {activeTab === 'library' && (
          <div className="space-y-4">
+            <div className="flex gap-2 items-center mb-4 overflow-x-auto no-scrollbar pb-1">
+                <button 
+                    onClick={() => setFilterCategory('All')} 
+                    className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === 'All' ? 'bg-black dark:bg-white text-white dark:text-black' : 'bg-gray-200 dark:bg-white/10 text-gray-500'}`}
+                >
+                    All
+                </button>
+                {FOOD_CATEGORIES.map(cat => (
+                    <button 
+                        key={cat} 
+                        onClick={() => setFilterCategory(cat)} 
+                        className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${filterCategory === cat ? 'bg-black dark:bg-white text-white dark:text-black' : 'bg-gray-200 dark:bg-white/10 text-gray-500'}`}
+                    >
+                        {cat}
+                    </button>
+                ))}
+            </div>
+
             <div className="relative mb-6">
                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                  <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search foods..." className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
             </div>
 
             <div className="grid gap-3">
-               {foodLibrary.filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase())).map(food => (
+               {foodLibrary
+                 .filter(f => (filterCategory === 'All' || f.category === filterCategory) && f.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                 .map(food => (
                   <div key={food.id} className="bg-white dark:bg-[#1C1C1E] p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 flex justify-between items-center group">
                      <div>
                         <div className="flex items-center gap-2">
                            <h3 className="font-bold text-black dark:text-white">{food.name}</h3>
-                           <span className="text-[10px] bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-full text-gray-500">{food.servingSize}</span>
+                           {food.category && <span className="text-[9px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-500 px-2 py-0.5 rounded-full uppercase tracking-wider">{food.category}</span>}
                         </div>
-                        <div className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-wider flex gap-3">
+                        <p className="text-[10px] text-gray-500 mt-0.5">Serving: {food.servingSize}</p>
+                        <div className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-wider flex gap-3">
                              <span>{food.calories} kcal</span>
                              <span className="text-blue-500">P:{food.protein}</span>
                              <span className="text-orange-500">C:{food.carbs}</span>
@@ -337,6 +361,20 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
                        <h3 className="text-2xl font-black text-black dark:text-white mb-4 uppercase tracking-tight">Add Food</h3>
                        <div className="space-y-3">
                            <input type="text" placeholder="Food Name (e.g. Chicken Breast)" value={newFood.name} onChange={e => setNewFood({...newFood, name: e.target.value})} className="w-full bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none" />
+                           
+                           {/* Category Selector */}
+                           <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                               {FOOD_CATEGORIES.map(cat => (
+                                   <button 
+                                       key={cat} 
+                                       onClick={() => setNewFood({...newFood, category: cat})} 
+                                       className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase transition-all whitespace-nowrap border ${newFood.category === cat ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent text-gray-400 border-gray-200 dark:border-white/10'}`}
+                                   >
+                                       {cat}
+                                   </button>
+                               ))}
+                           </div>
+
                            <div className="grid grid-cols-2 gap-3">
                                <input type="text" placeholder="Serving (e.g. 100g)" value={newFood.servingSize} onChange={e => setNewFood({...newFood, servingSize: e.target.value})} className="bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none" />
                                <input type="number" placeholder="Calories" value={newFood.calories} onChange={e => setNewFood({...newFood, calories: e.target.value})} className="bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none" />

@@ -26,6 +26,9 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient, viewingCli
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
 
+  // New state for highlighting available slots
+  const [highlightPattern, setHighlightPattern] = useState<'3-day' | '4-day' | null>(null);
+
   useEffect(() => {
     if (activeSession) {
       setNewDate(activeSession.session.date);
@@ -50,7 +53,7 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient, viewingCli
     return all.sort((a, b) => a.session.time.localeCompare(b.session.time));
   }, [clients, viewingClient]);
 
-  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(currentWeekStart, i));
+  const weekDays = useMemo(() => Array.from({ length: 7 }).map((_, i) => addDays(currentWeekStart, i)), [currentWeekStart]);
   
   // --- Smart Opening Logic ---
   const smartOpenings = useMemo(() => {
@@ -139,6 +142,13 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient, viewingCli
     const morningHours = Array.from({ length: 7 }, (_, i) => 5 + i); // 5 to 11
     const eveningHours = Array.from({ length: 4 }, (_, i) => 17 + i); // 17 to 20
 
+    // Helper to check if a specific cell should be highlighted
+    const checkHighlight = (day: Date, hour: number) => {
+        if (!highlightPattern || viewingClient) return false;
+        const options = highlightPattern === '4-day' ? smartOpenings.fourDayOptions : smartOpenings.threeDayOptions;
+        return options.some(opt => opt.hour === hour && opt.days.some(d => isSameDay(d, day)));
+    };
+
     const GridSection = ({ title, hours, colorClass }: { title: string, hours: number[], colorClass: string }) => (
         <div className="mb-8 animate-slideUp">
             <div className="flex items-center justify-between mb-4 px-2">
@@ -187,9 +197,10 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient, viewingCli
                                         return s.session.date === dateStr && h === hour && isSessionVisible(s.session);
                                     });
                                     const isDayToday = isToday(day);
+                                    const isHighlighted = checkHighlight(day, hour);
                                     
                                     return (
-                                        <div key={day.toString()} className={`relative border-r border-gray-100 dark:border-white/5 last:border-0 p-1.5 transition-colors ${isDayToday ? 'bg-blue-50/30 dark:bg-blue-900/5' : 'hover:bg-gray-50 dark:hover:bg-white/[0.02]'}`}>
+                                        <div key={day.toString()} className={`relative border-r border-gray-100 dark:border-white/5 last:border-0 p-1.5 transition-colors ${isHighlighted ? 'bg-green-50/20 dark:bg-green-900/5' : (isDayToday ? 'bg-blue-50/30 dark:bg-blue-900/5' : 'hover:bg-gray-50 dark:hover:bg-white/[0.02]')}`}>
                                             <div className="h-full flex flex-col gap-1.5 justify-center">
                                                 {sessions.map((s, idx) => {
                                                     const isCompleted = s.session.status === 'completed';
@@ -209,8 +220,12 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient, viewingCli
                                                 })}
                                                 
                                                 {!viewingClient && sessions.length === 0 && (
-                                                    <div className="w-full h-full rounded-2xl border border-dashed border-gray-200 dark:border-white/10 flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5">
-                                                        <Plus size={14} className="text-gray-300 dark:text-gray-600" />
+                                                    <div className={`w-full h-full rounded-2xl border border-dashed flex items-center justify-center cursor-pointer transition-all ${
+                                                        isHighlighted 
+                                                            ? 'border-green-300 bg-green-50/80 opacity-100 dark:border-green-500/50 dark:bg-green-500/20 shadow-sm' 
+                                                            : 'border-gray-200 dark:border-white/10 opacity-0 group-hover/row:opacity-100 hover:bg-gray-50 dark:hover:bg-white/5'
+                                                    }`}>
+                                                        {isHighlighted ? <Sparkles size={14} className="text-green-600 dark:text-green-400 animate-pulse" /> : <Plus size={14} className="text-gray-300 dark:text-gray-600" />}
                                                     </div>
                                                 )}
                                             </div>
@@ -230,63 +245,38 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient, viewingCli
             <GridSection title="Morning (5:15 - 11 AM)" hours={morningHours} colorClass="bg-orange-500" />
             <GridSection title="Evening (5:30 - 7:45 PM)" hours={eveningHours} colorClass="bg-indigo-500" />
             
-            {/* Smart Opening Suggestions - Only for Admin */}
-            {!viewingClient && (
+            {/* Smart Opening Suggestions - Text Fallback / Info */}
+            {!viewingClient && !highlightPattern && (
                 <div className="mt-10 mb-12">
                 <h3 className="text-[13px] font-black text-black dark:text-white uppercase tracking-tight mb-6 flex items-center gap-2 px-2">
                     <Sparkles size={16} className="text-yellow-500" />
-                    Potential New Client Slots
+                    Slot Suggestions
                 </h3>
 
-                <div className="space-y-8">
-                    {/* 4 Days a Week */}
-                    <div>
-                        <h4 className="text-[11px] font-bold text-gray-400 uppercase mb-3 pl-2">4 Days / Week (High Frequency)</h4>
-                        {smartOpenings.fourDayOptions.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {smartOpenings.fourDayOptions.map((opt, i) => (
-                            <div key={i} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-[#2C2C2E] transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className="bg-green-50 dark:bg-green-900/30 w-12 h-12 rounded-2xl flex items-center justify-center text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/50">
-                                    <Clock size={20} strokeWidth={2.5}/>
-                                    </div>
-                                    <div>
-                                    <span className="block text-xl font-black text-black dark:text-white">{format(new Date().setHours(opt.hour, 0), 'h:00 a')}</span>
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{opt.days.map(d => format(d, 'EEE')).join(', ')}</span>
-                                    </div>
+                <div className="space-y-4">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div onClick={() => setHighlightPattern('4-day')} className="cursor-pointer bg-white dark:bg-[#1C1C1E] p-4 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/10 active:scale-95 transition-transform hover:border-green-200 dark:hover:border-green-900/50 group">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform">
+                                    <Clock size={16} strokeWidth={3} />
                                 </div>
-                                <div className="text-right">
-                                    <span className="block text-[10px] font-bold bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 px-2.5 py-1.5 rounded-xl mb-1">30 or 45 min</span>
-                                </div>
+                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-wider">High Freq</span>
                             </div>
-                            ))}
+                            <p className="text-2xl font-black text-black dark:text-white">{smartOpenings.fourDayOptions.length}</p>
+                            <p className="text-[10px] font-bold text-gray-400">4-Day Slots</p>
                         </div>
-                        ) : <p className="text-xs text-gray-400 pl-2 italic">No 4-day consistent gaps found this week.</p>}
-                    </div>
 
-                    {/* 3 Days a Week */}
-                    <div>
-                        <h4 className="text-[11px] font-bold text-gray-400 uppercase mb-3 pl-2">3 Days / Week (Standard)</h4>
-                        {smartOpenings.threeDayOptions.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {smartOpenings.threeDayOptions.map((opt, i) => (
-                            <div key={i} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-[#2C2C2E] transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className="bg-blue-50 dark:bg-blue-900/30 w-12 h-12 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50">
-                                    <CalendarIcon size={20} strokeWidth={2.5}/>
-                                    </div>
-                                    <div>
-                                    <span className="block text-xl font-black text-black dark:text-white">{format(new Date().setHours(opt.hour, 0), 'h:00 a')}</span>
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{opt.days.map(d => format(d, 'EEE')).join(', ')}</span>
-                                    </div>
+                        <div onClick={() => setHighlightPattern('3-day')} className="cursor-pointer bg-white dark:bg-[#1C1C1E] p-4 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/10 active:scale-95 transition-transform hover:border-blue-200 dark:hover:border-blue-900/50 group">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                                    <CalendarIcon size={16} strokeWidth={3} />
                                 </div>
-                                <div className="text-right">
-                                    <span className="block text-[10px] font-bold bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 px-2.5 py-1.5 rounded-xl mb-1">30 or 45 min</span>
-                                </div>
+                                <span className="text-[11px] font-black text-gray-400 uppercase tracking-wider">Standard</span>
                             </div>
-                            ))}
+                            <p className="text-2xl font-black text-black dark:text-white">{smartOpenings.threeDayOptions.length}</p>
+                            <p className="text-[10px] font-bold text-gray-400">3-Day Slots</p>
                         </div>
-                        ) : <p className="text-xs text-gray-400 pl-2 italic">No 3-day consistent gaps found this week.</p>}
                     </div>
                 </div>
                 </div>
@@ -321,19 +311,41 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient, viewingCli
          </div>
        </div>
 
-       <div className="px-1 mb-4 flex gap-3">
+       <div className="px-1 mb-4 flex flex-col gap-3">
+          <div className="flex gap-3">
+              {!viewingClient && (
+                <div className="relative flex-1">
+                    <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full appearance-none bg-ios-card-light dark:bg-[#1C1C1E] text-black dark:text-white py-2.5 pl-4 pr-10 rounded-2xl text-sm font-bold shadow-sm outline-none border border-transparent dark:border-white/5 focus:border-ios-blue transition-all">
+                        <option value="all">All Clients</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+              )}
+              <button onClick={() => setShowHistory(!showHistory)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm border border-transparent dark:border-white/5 ${showHistory ? 'bg-ios-blue text-white' : 'bg-ios-card-light dark:bg-[#1C1C1E] text-ios-gray'} ${viewingClient ? 'w-full justify-center' : ''}`}>
+                 <Filter size={14} /> {showHistory ? 'History' : 'To-Do'}
+              </button>
+          </div>
+
           {!viewingClient && (
-            <div className="relative flex-1">
-                <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full appearance-none bg-ios-card-light dark:bg-[#1C1C1E] text-black dark:text-white py-2.5 pl-4 pr-10 rounded-2xl text-sm font-bold shadow-sm outline-none border border-transparent dark:border-white/5 focus:border-ios-blue transition-all">
-                    <option value="all">All Clients</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            </div>
+             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0 mr-1">Find Openings:</span>
+                 <button 
+                    onClick={() => setHighlightPattern(highlightPattern === '4-day' ? null : '4-day')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all border ${highlightPattern === '4-day' ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-900/50 shadow-sm' : 'bg-white dark:bg-[#1C1C1E] text-gray-400 border-gray-100 dark:border-white/10'}`}
+                 >
+                    {highlightPattern === '4-day' && <CheckCircle2 size={10} />}
+                    4-Day Slots
+                 </button>
+                 <button 
+                    onClick={() => setHighlightPattern(highlightPattern === '3-day' ? null : '3-day')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all border ${highlightPattern === '3-day' ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-900/50 shadow-sm' : 'bg-white dark:bg-[#1C1C1E] text-gray-400 border-gray-100 dark:border-white/10'}`}
+                 >
+                    {highlightPattern === '3-day' && <CheckCircle2 size={10} />}
+                    3-Day Slots
+                 </button>
+             </div>
           )}
-          <button onClick={() => setShowHistory(!showHistory)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm border border-transparent dark:border-white/5 ${showHistory ? 'bg-ios-blue text-white' : 'bg-ios-card-light dark:bg-[#1C1C1E] text-ios-gray'} ${viewingClient ? 'w-full justify-center' : ''}`}>
-             <Filter size={14} /> {showHistory ? 'History' : 'To-Do'}
-          </button>
        </div>
 
        <div className="flex-1 space-y-3">

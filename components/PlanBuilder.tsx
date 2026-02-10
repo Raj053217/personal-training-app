@@ -158,7 +158,10 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange, fo
                         <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                              {foodLibrary.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase())).map(food => (
                                  <button key={food.id} onClick={() => addDietItemFromLibrary(showFoodPicker.mealId, food)} className="w-full text-left p-3 rounded-2xl bg-gray-50 dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-900/20 active:scale-95 transition">
-                                     <p className="font-bold text-sm text-black dark:text-white">{food.name}</p>
+                                     <div className="flex justify-between items-center mb-1">
+                                        <p className="font-bold text-sm text-black dark:text-white">{food.name}</p>
+                                        {food.category && <span className="text-[8px] bg-gray-200 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-500 uppercase font-bold">{food.category}</span>}
+                                     </div>
                                      <p className="text-[10px] text-gray-500 font-medium">
                                         {food.calories} kcal • P:{food.protein} C:{food.carbs} F:{food.fats} • {food.servingSize}
                                      </p>

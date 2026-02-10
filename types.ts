@@ -55,6 +55,7 @@ export interface FoodItem {
   protein: string;
   carbs: string;
   fats: string;
+  category?: string; // New: Categorization
 }
 
 export interface WorkoutExercise {
