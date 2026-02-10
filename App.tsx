@@ -1,8 +1,7 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { Client, NavPage } from './types';
-import { saveClients, getInitialData, saveClientsToCloud, loadClientsFromCloud } from './services/storage';
+import { saveClients, getInitialData, saveClientsToCloud, loadClientsFromCloud, updateClientInCloud } from './services/storage';
 import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, Plus, Loader2, BookOpen, LogOut } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import ClientList from './components/ClientList';
@@ -10,10 +9,11 @@ import ClientForm from './components/ClientForm';
 import Schedule from './components/Schedule';
 import Settings from './components/Settings';
 import PlanManager from './components/PlanManager';
+import LoginScreen from './components/LoginScreen';
 import { useAuth } from './contexts/AuthContext';
 
 const App: React.FC = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, role, coachId, logout } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState<NavPage>(NavPage.DASHBOARD);
@@ -31,10 +31,15 @@ const App: React.FC = () => {
   // Helper to update clients and push to history
   const updateClients = (newClients: Client[], addToHistory = true) => {
     setClients(newClients);
+    // If in client mode, ensure activeClient state is also refreshed
+    if (activeClient) {
+        const updatedMe = newClients.find(c => c.id === activeClient.id);
+        if (updatedMe) setActiveClient(updatedMe);
+    }
+
     if (addToHistory) {
         const newHistory = history.slice(0, historyIndex + 1);
         newHistory.push(newClients);
-        // Limit history size to 50 to prevent memory issues
         if (newHistory.length > 50) newHistory.shift();
         setHistory(newHistory);
         setHistoryIndex(newHistory.length - 1);
@@ -67,7 +72,6 @@ const App: React.FC = () => {
     if (savedCurrency) setCurrency(savedCurrency);
   }, []);
 
-  // Theme Side Effect
   useEffect(() => {
     const root = window.document.documentElement;
     const body = window.document.body;
@@ -91,49 +95,71 @@ const App: React.FC = () => {
         let initialClients: Client[] = [];
 
         if (user) {
-            // Logged in: Try fetching from cloud
-            const cloudData = await loadClientsFromCloud(user.uid);
+            // Determine whose data to load
+            const targetUid = role === 'client' && coachId ? coachId : user.uid;
+            
+            const cloudData = await loadClientsFromCloud(targetUid);
             if (cloudData) {
                 initialClients = cloudData;
-            } else {
-                // First time login or empty cloud: Use local data and sync it up
+            } else if (role === 'admin') {
+                // Only admins can initialize fresh data
                 const localData = getInitialData();
                 initialClients = localData;
                 if (localData.length > 0) {
                     await saveClientsToCloud(user.uid, localData);
                 }
             }
+
+            // If Client Role, lock the view to themselves
+            if (role === 'client') {
+                const myData = initialClients.find(c => c.email.toLowerCase() === user.email?.toLowerCase());
+                if (myData) {
+                    setActiveClient(myData);
+                    // We keep all clients in state so 'updateClients' logic works, 
+                    // but we only show the activeClient in the UI.
+                    // Ideally for security we should filter at the API level, 
+                    // but for this mini-app we filter at UI level.
+                } else {
+                   alert("You are logged in as a client, but your profile was not found. Please contact your coach.");
+                   logout();
+                   return;
+                }
+            }
         } else {
-            // Guest: Load from local storage
-            initialClients = getInitialData();
+            // Should not happen with LoginScreen, but safe fallback
+            initialClients = [];
         }
         
         setClients(initialClients);
-        // Initialize history
         setHistory([initialClients]);
         setHistoryIndex(0);
         
         setDataLoading(false);
     };
 
-    if (!authLoading) {
+    if (!authLoading && user) {
         initData();
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, role, coachId]);
 
   // Data Saving Logic
   useEffect(() => {
-    // We only save if we are not in the initial loading state
-    if (!dataLoading && !authLoading) {
-        // Always save to local storage as backup/offline cache
-        saveClients(clients);
-        
-        // If logged in, sync to cloud
-        if (user) {
+    if (!dataLoading && !authLoading && user) {
+        // Admin: Full Sync
+        if (role === 'admin') {
+            saveClients(clients); // Local Backup
             saveClientsToCloud(user.uid, clients);
+        } 
+        // Client: Safe Single Update
+        else if (role === 'client' && activeClient && coachId) {
+            // Find the latest version of 'me' in the clients array
+            const currentMe = clients.find(c => c.id === activeClient.id);
+            if (currentMe) {
+                updateClientInCloud(coachId, currentMe);
+            }
         }
     }
-  }, [clients, user, dataLoading, authLoading]);
+  }, [clients, user, dataLoading, authLoading, role, coachId, activeClient]);
 
   // Push Notifications Checker
   useEffect(() => {
@@ -142,19 +168,21 @@ const App: React.FC = () => {
       if (!enabled || Notification.permission !== 'granted') return;
       const now = new Date();
       clients.forEach(client => {
+        if (activeClient && client.id !== activeClient.id) return; // Only notify for self if client mode
+
         client.sessions.forEach(session => {
            if (session.completed || session.status === 'cancelled' || session.status === 'missed') return;
            const sessionTime = new Date(`${session.date}T${session.time}`);
            const diffMins = (sessionTime.getTime() - now.getTime()) / (1000 * 60);
            if (diffMins >= 14 && diffMins < 15) {
-              new Notification(`Upcoming Session: ${client.name}`, { body: `Starts at ${session.time}` });
+              new Notification(`Upcoming Session`, { body: `Starts at ${session.time}` });
            }
         });
       });
     };
     const interval = setInterval(checkNotifications, 60000);
     return () => clearInterval(interval);
-  }, [clients]);
+  }, [clients, activeClient]);
 
   const handleSaveClient = (client: Client) => {
     const exists = clients.some(c => c.id === client.id);
@@ -190,6 +218,10 @@ const App: React.FC = () => {
   };
 
   const exitClientMode = () => {
+      if (role === 'client') {
+          if(window.confirm("Log out?")) logout();
+          return;
+      }
       if (window.confirm("Exit Client View?")) {
           setActiveClient(null);
           setCurrentPage(NavPage.DASHBOARD);
@@ -208,13 +240,20 @@ const App: React.FC = () => {
     </button>
   );
 
+  // --- RENDERING ---
+
   if (authLoading || dataLoading) {
       return (
           <div className="min-h-screen flex flex-col items-center justify-center bg-[#F2F2F7] dark:bg-black text-ios-gray">
               <Loader2 className="animate-spin mb-2" size={32} />
-              <p className="text-sm font-medium">Syncing...</p>
+              <p className="text-sm font-medium">Loading...</p>
           </div>
       );
+  }
+
+  // If not logged in, show Login Screen
+  if (!user) {
+      return <LoginScreen />;
   }
 
   return (
@@ -239,7 +278,7 @@ const App: React.FC = () => {
                 {currentPage === NavPage.SCHEDULE && <Schedule clients={clients} onUpdateClient={handleSaveClient} />}
                 {currentPage === NavPage.SETTINGS && (
                     <Settings 
-                        clients={clients} // Passed for Client View Switcher
+                        clients={clients} 
                         isDarkMode={isDarkMode} 
                         toggleTheme={() => setIsDarkMode(!isDarkMode)} 
                         currency={currency} 
@@ -273,7 +312,7 @@ const App: React.FC = () => {
                              {activeClient.name.charAt(0)}
                         </div>
                         <div>
-                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Client Mode</p>
+                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{role === 'client' ? 'Welcome Back' : 'Client Mode'}</p>
                              <h2 className="text-lg font-black text-black dark:text-white leading-none">{activeClient.name}</h2>
                         </div>
                      </div>
@@ -283,9 +322,9 @@ const App: React.FC = () => {
                  </div>
 
                  {currentPage === NavPage.DASHBOARD && <Dashboard clients={[activeClient]} navigateTo={setCurrentPage} currency={currency} viewingClient={activeClient} />}
-                 {currentPage === NavPage.SCHEDULE && <Schedule clients={[activeClient]} onUpdateClient={() => {}} />}
-                 {currentPage === NavPage.PLANS && <PlanManager clients={[activeClient]} onUpdateClient={() => {}} viewingClient={activeClient} />}
-                 {/* Reusing Dashboard as Profile page for client for now, or could act as 'Settings' */}
+                 {currentPage === NavPage.SCHEDULE && <Schedule clients={[activeClient]} onUpdateClient={handleSaveClient} viewingClient={activeClient} />}
+                 {currentPage === NavPage.PLANS && <PlanManager clients={[activeClient]} onUpdateClient={handleSaveClient} viewingClient={activeClient} />}
+                 {/* Profile / Settings for Client */}
                  {currentPage === NavPage.SETTINGS && (
                       <div className="animate-fadeIn">
                           <h1 className="text-[34px] font-bold text-black dark:text-white mb-6">Profile</h1>
@@ -306,8 +345,20 @@ const App: React.FC = () => {
                                   <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Cycle Expiry</label>
                                   <p className="text-lg font-medium text-black dark:text-white">{activeClient.expiryDate}</p>
                               </div>
+                              <div className="pt-4 border-t border-gray-100 dark:border-white/5">
+                                 <div className="flex justify-between items-center mb-2">
+                                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Appearance</label>
+                                    <button 
+                                        onClick={() => setIsDarkMode(!isDarkMode)} 
+                                        className={`w-[51px] h-[31px] rounded-full transition-colors relative ${isDarkMode ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`}
+                                    >
+                                        <div className={`absolute top-0.5 w-[27px] h-[27px] bg-white rounded-full shadow-md transition-transform ${isDarkMode ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
+                                    </button>
+                                 </div>
+                              </div>
                           </div>
-                          <button onClick={exitClientMode} className="w-full mt-6 py-4 bg-red-50 dark:bg-red-900/20 text-red-600 font-bold rounded-2xl">Log Out (Exit View)</button>
+                          
+                          <button onClick={logout} className="w-full mt-6 py-4 bg-red-50 dark:bg-red-900/20 text-red-600 font-bold rounded-2xl">Sign Out</button>
                       </div>
                  )}
             </>
