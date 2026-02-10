@@ -2,18 +2,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Client, Session, SessionStatus } from '../types';
 import { format, isSameDay, addDays, startOfWeek, addWeeks, subWeeks, isToday, parse, isBefore } from 'date-fns';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, Filter, ChevronDown, Flame, FileText, LayoutGrid, List, Plus, ArrowRight, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, Filter, ChevronDown, Flame, FileText, LayoutGrid, List, Plus, ArrowRight, RefreshCw, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface ScheduleProps {
   clients: Client[];
   onUpdateClient: (client: Client) => void;
+  // Optional client view mode
+  viewingClient?: Client;
 }
 
-const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
+const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient, viewingClient }) => {
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showHistory, setShowHistory] = useState(false); // Default false: Hide completed
-  const [selectedClientId, setSelectedClientId] = useState<string>('all');
+  const [selectedClientId, setSelectedClientId] = useState<string>(viewingClient ? viewingClient.id : 'all');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   
   const [activeSession, setActiveSession] = useState<{ session: Session; clientName: string; clientId: string } | null>(null);
@@ -38,14 +40,62 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
   const allSessions = useMemo(() => {
     const all: { session: Session; clientName: string; clientId: string }[] = [];
     clients.forEach(client => {
+      // If in Client Mode, only show that client's sessions
+      if (viewingClient && client.id !== viewingClient.id) return;
+
       client.sessions.forEach(session => {
         all.push({ session, clientName: client.name, clientId: client.id });
       });
     });
     return all.sort((a, b) => a.session.time.localeCompare(b.session.time));
-  }, [clients]);
+  }, [clients, viewingClient]);
 
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(currentWeekStart, i));
+  
+  // --- Smart Opening Logic ---
+  const smartOpenings = useMemo(() => {
+    // Hide smart suggestions in Client Mode
+    if (viewingClient) return { fourDayOptions: [], threeDayOptions: [] };
+
+    const morningHours = Array.from({ length: 7 }, (_, i) => 5 + i); // 5-11
+    const eveningHours = Array.from({ length: 4 }, (_, i) => 17 + i); // 17-20
+    const workingHours = [...morningHours, ...eveningHours];
+    
+    // 1. Map availability by Hour
+    const hourMap: Record<number, Date[]> = {};
+
+    workingHours.forEach(hour => {
+        hourMap[hour] = [];
+        weekDays.forEach(day => {
+            const dateStr = format(day, 'yyyy-MM-dd');
+            // Check if ANY session exists in this hour
+            const isBusy = allSessions.some(s => {
+                const sDate = s.session.date;
+                const sHour = parseInt(s.session.time.split(':')[0]);
+                // Simple collision detection: if same date and hour, it's busy
+                return sDate === dateStr && sHour === hour && s.session.status !== 'cancelled';
+            });
+            if (!isBusy) {
+                hourMap[hour].push(day);
+            }
+        });
+    });
+
+    // 2. Group into 4-day and 3-day patterns
+    const fourDayOptions: { hour: number, days: Date[] }[] = [];
+    const threeDayOptions: { hour: number, days: Date[] }[] = [];
+
+    Object.entries(hourMap).forEach(([hourStr, days]) => {
+        const hour = parseInt(hourStr);
+        if (days.length >= 4) {
+            fourDayOptions.push({ hour, days: days.slice(0, 4) }); // Take first 4 for simplicity
+        } else if (days.length === 3) {
+            threeDayOptions.push({ hour, days });
+        }
+    });
+
+    return { fourDayOptions, threeDayOptions };
+  }, [allSessions, weekDays, viewingClient]);
   
   const updateStatus = (status: SessionStatus, extraData?: { intensity?: number, feedback?: string }) => {
     if (!activeSession) return;
@@ -73,7 +123,8 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
 
   // Filtering Logic: Hide completed/cancelled unless showHistory is true
   const isSessionVisible = (s: Session) => {
-      if (selectedClientId !== 'all') {
+      // viewingClient logic is handled in allSessions, but selectedClientId filter is extra
+      if (!viewingClient && selectedClientId !== 'all') {
            const client = clients.find(c => c.id === selectedClientId);
            if (!client || !client.sessions.find(cs => cs.id === s.id)) return false;
       }
@@ -89,48 +140,79 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
     const eveningHours = Array.from({ length: 4 }, (_, i) => 17 + i); // 17 to 20
 
     const GridSection = ({ title, hours, colorClass }: { title: string, hours: number[], colorClass: string }) => (
-        <div className="mb-6">
-            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 px-1 flex items-center gap-2">
-                <div className={`w-1.5 h-1.5 rounded-full ${colorClass}`}></div>
-                {title}
-            </h3>
-            <div className="bg-white dark:bg-[#1C1C1E] rounded-3xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 overflow-x-auto">
-                <div className="min-w-[750px]">
-                    <div className="grid grid-cols-[70px_repeat(7,1fr)] border-b border-gray-50 dark:border-white/5 bg-gray-50/30 dark:bg-white/5">
-                        <div className="p-4 text-[10px] text-gray-400 font-black border-r border-gray-50 dark:border-white/5 uppercase">Time</div>
-                        {weekDays.map(day => (
-                            <div key={day.toString()} className={`p-4 text-center border-r border-gray-50 dark:border-white/5 last:border-0 ${isToday(day) ? 'bg-blue-500/10' : ''}`}>
-                                <p className="text-[10px] font-black text-gray-400 uppercase">{format(day, 'EEE')}</p>
-                                <p className={`text-[16px] font-black ${isToday(day) ? 'text-blue-500' : 'text-black dark:text-white'}`}>{format(day, 'd')}</p>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="divide-y divide-gray-50 dark:divide-white/5">
-                        {hours.map(hour => (
-                            <div key={hour} className="grid grid-cols-[70px_repeat(7,1fr)] min-h-[70px]">
-                                <div className="p-3 text-[11px] font-black text-gray-400 border-r border-gray-50 dark:border-white/5 flex flex-col items-center justify-center bg-gray-50/20 dark:bg-white/5">
-                                    <span>{format(new Date().setHours(hour, 0), 'h a')}</span>
+        <div className="mb-8 animate-slideUp">
+            <div className="flex items-center justify-between mb-4 px-2">
+                 <h3 className="text-[13px] font-black text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${colorClass} shadow-sm`}></span>
+                    {title}
+                </h3>
+            </div>
+            
+            <div className="bg-white dark:bg-[#1C1C1E] rounded-[32px] shadow-sm border border-gray-100 dark:border-white/5 overflow-x-auto overflow-y-hidden no-scrollbar relative">
+                <div className="min-w-[800px]">
+                    {/* Header Row */}
+                    <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+                        <div className="p-4 text-[10px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-widest text-center self-center sticky left-0 bg-gray-50/90 dark:bg-[#1C1C1E]/95 backdrop-blur-sm z-20 border-r border-gray-100 dark:border-white/5">
+                            Time
+                        </div>
+                        {weekDays.map(day => {
+                            const isDayToday = isToday(day);
+                            return (
+                                <div key={day.toString()} className={`py-4 px-2 text-center border-r border-gray-100 dark:border-white/5 last:border-0 relative group transition-colors ${isDayToday ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}>
+                                    <span className={`text-[9px] font-black uppercase tracking-widest block mb-1 ${isDayToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'}`}>
+                                        {format(day, 'EEE')}
+                                    </span>
+                                    <div className={`w-8 h-8 mx-auto flex items-center justify-center rounded-full text-[14px] font-black ${isDayToday ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30' : 'text-gray-900 dark:text-white'}`}>
+                                        {format(day, 'd')}
+                                    </div>
                                 </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Rows */}
+                    <div className="divide-y divide-gray-100 dark:divide-white/5">
+                        {hours.map(hour => (
+                            <div key={hour} className="grid grid-cols-[60px_repeat(7,1fr)] group/row min-h-[85px]">
+                                {/* Time Label (Sticky Left) */}
+                                <div className="relative sticky left-0 z-10 bg-white dark:bg-[#1C1C1E] border-r border-gray-100 dark:border-white/5 flex items-center justify-center p-2">
+                                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500">{format(new Date().setHours(hour, 0), 'h a')}</span>
+                                </div>
+
+                                {/* Cells */}
                                 {weekDays.map(day => {
                                     const dateStr = format(day, 'yyyy-MM-dd');
                                     const sessions = allSessions.filter(s => {
                                         const h = parseInt(s.session.time.split(':')[0]);
                                         return s.session.date === dateStr && h === hour && isSessionVisible(s.session);
                                     });
+                                    const isDayToday = isToday(day);
+                                    
                                     return (
-                                        <div key={day.toString()} className={`relative border-r border-gray-50 dark:border-white/5 p-1.5 last:border-0 ${isToday(day) ? 'bg-blue-500/5' : ''}`}>
-                                            <div className="flex flex-col gap-1">
-                                                {sessions.map((s, idx) => (
-                                                    <div key={idx} onClick={() => setActiveSession(s)} className={`text-[9px] font-black p-2 rounded-xl truncate cursor-pointer shadow-sm border border-transparent active:scale-95 transition-all
-                                                        ${s.session.status === 'completed' ? 'bg-green-500 text-white' : 
-                                                          s.session.status === 'cancelled' ? 'bg-gray-100 text-gray-400 opacity-50' : 
-                                                          isBefore(new Date(s.session.date + 'T' + s.session.time), new Date()) ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' :
-                                                          'bg-blue-500 text-white shadow-lg shadow-blue-500/20'}
-                                                    `}>
-                                                        {s.clientName}
+                                        <div key={day.toString()} className={`relative border-r border-gray-100 dark:border-white/5 last:border-0 p-1.5 transition-colors ${isDayToday ? 'bg-blue-50/30 dark:bg-blue-900/5' : 'hover:bg-gray-50 dark:hover:bg-white/[0.02]'}`}>
+                                            <div className="h-full flex flex-col gap-1.5 justify-center">
+                                                {sessions.map((s, idx) => {
+                                                    const isCompleted = s.session.status === 'completed';
+                                                    const isCancelled = s.session.status === 'cancelled';
+                                                    const isMissed = s.session.status === 'missed';
+                                                    
+                                                    let cardStyle = "bg-blue-500 text-white shadow-md shadow-blue-500/20 dark:bg-blue-600 dark:border-blue-500/50";
+                                                    if (isCompleted) cardStyle = "bg-emerald-500 text-white shadow-md shadow-emerald-500/20 dark:bg-emerald-600";
+                                                    if (isCancelled) cardStyle = "bg-gray-100 text-gray-400 dark:bg-white/10 dark:text-gray-500";
+                                                    if (isMissed) cardStyle = "bg-orange-500 text-white shadow-md shadow-orange-500/20";
+
+                                                    return (
+                                                        <div key={idx} onClick={() => setActiveSession(s)} className={`p-2.5 rounded-2xl cursor-pointer border border-transparent active:scale-95 transition-all ${cardStyle} relative group/card`}>
+                                                            <p className="text-[10px] font-black truncate leading-tight">{s.clientName}</p>
+                                                        </div>
+                                                    )
+                                                })}
+                                                
+                                                {!viewingClient && sessions.length === 0 && (
+                                                    <div className="w-full h-full rounded-2xl border border-dashed border-gray-200 dark:border-white/10 flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5">
+                                                        <Plus size={14} className="text-gray-300 dark:text-gray-600" />
                                                     </div>
-                                                ))}
-                                                {sessions.length === 0 && <div className="w-full h-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"><Plus size={14} className="text-gray-200" /></div>}
+                                                )}
                                             </div>
                                         </div>
                                     );
@@ -144,9 +226,71 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
     );
 
     return (
-        <div className="mt-4 pb-24 px-1">
+        <div className="mt-4 pb-32 px-1">
             <GridSection title="Morning (5:15 - 11 AM)" hours={morningHours} colorClass="bg-orange-500" />
             <GridSection title="Evening (5:30 - 7:45 PM)" hours={eveningHours} colorClass="bg-indigo-500" />
+            
+            {/* Smart Opening Suggestions - Only for Admin */}
+            {!viewingClient && (
+                <div className="mt-10 mb-12">
+                <h3 className="text-[13px] font-black text-black dark:text-white uppercase tracking-tight mb-6 flex items-center gap-2 px-2">
+                    <Sparkles size={16} className="text-yellow-500" />
+                    Potential New Client Slots
+                </h3>
+
+                <div className="space-y-8">
+                    {/* 4 Days a Week */}
+                    <div>
+                        <h4 className="text-[11px] font-bold text-gray-400 uppercase mb-3 pl-2">4 Days / Week (High Frequency)</h4>
+                        {smartOpenings.fourDayOptions.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {smartOpenings.fourDayOptions.map((opt, i) => (
+                            <div key={i} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-[#2C2C2E] transition-colors">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-green-50 dark:bg-green-900/30 w-12 h-12 rounded-2xl flex items-center justify-center text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/50">
+                                    <Clock size={20} strokeWidth={2.5}/>
+                                    </div>
+                                    <div>
+                                    <span className="block text-xl font-black text-black dark:text-white">{format(new Date().setHours(opt.hour, 0), 'h:00 a')}</span>
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{opt.days.map(d => format(d, 'EEE')).join(', ')}</span>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-[10px] font-bold bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 px-2.5 py-1.5 rounded-xl mb-1">30 or 45 min</span>
+                                </div>
+                            </div>
+                            ))}
+                        </div>
+                        ) : <p className="text-xs text-gray-400 pl-2 italic">No 4-day consistent gaps found this week.</p>}
+                    </div>
+
+                    {/* 3 Days a Week */}
+                    <div>
+                        <h4 className="text-[11px] font-bold text-gray-400 uppercase mb-3 pl-2">3 Days / Week (Standard)</h4>
+                        {smartOpenings.threeDayOptions.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {smartOpenings.threeDayOptions.map((opt, i) => (
+                            <div key={i} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[32px] shadow-sm border border-gray-100 dark:border-white/10 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-[#2C2C2E] transition-colors">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-blue-50 dark:bg-blue-900/30 w-12 h-12 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50">
+                                    <CalendarIcon size={20} strokeWidth={2.5}/>
+                                    </div>
+                                    <div>
+                                    <span className="block text-xl font-black text-black dark:text-white">{format(new Date().setHours(opt.hour, 0), 'h:00 a')}</span>
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{opt.days.map(d => format(d, 'EEE')).join(', ')}</span>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-[10px] font-bold bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 px-2.5 py-1.5 rounded-xl mb-1">30 or 45 min</span>
+                                </div>
+                            </div>
+                            ))}
+                        </div>
+                        ) : <p className="text-xs text-gray-400 pl-2 italic">No 3-day consistent gaps found this week.</p>}
+                    </div>
+                </div>
+                </div>
+            )}
         </div>
     );
   };
@@ -158,7 +302,7 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
          
          <div className="flex items-center gap-3">
              {/* Week Navigation */}
-             <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-0.5">
+             <div className="flex items-center bg-gray-100 dark:bg-[#1C1C1E] border dark:border-white/5 rounded-xl p-0.5">
                 <button onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))} className="p-2 hover:bg-white dark:hover:bg-[#2C2C2E] rounded-lg transition-colors text-gray-500 dark:text-gray-400">
                     <ChevronLeft size={18} />
                 </button>
@@ -170,22 +314,24 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
                 </button>
              </div>
 
-             <div className="bg-gray-100 dark:bg-gray-800 p-0.5 rounded-xl flex">
-                 <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500' : 'text-gray-400'}`}><List size={20}/></button>
-                 <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500' : 'text-gray-400'}`}><LayoutGrid size={20}/></button>
+             <div className="bg-gray-100 dark:bg-[#1C1C1E] border dark:border-white/5 p-0.5 rounded-xl flex">
+                 <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500 dark:text-blue-400' : 'text-gray-400'}`}><List size={20}/></button>
+                 <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-blue-500 dark:text-blue-400' : 'text-gray-400'}`}><LayoutGrid size={20}/></button>
              </div>
          </div>
        </div>
 
        <div className="px-1 mb-4 flex gap-3">
-          <div className="relative flex-1">
-              <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full appearance-none bg-ios-card-light dark:bg-ios-card-dark text-black dark:text-white py-2.5 pl-4 pr-10 rounded-2xl text-sm font-bold shadow-sm outline-none border border-transparent focus:border-ios-blue transition-all">
-                  <option value="all">All Clients</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
-          </div>
-          <button onClick={() => setShowHistory(!showHistory)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm ${showHistory ? 'bg-ios-blue text-white' : 'bg-ios-card-light dark:bg-ios-card-dark text-ios-gray'}`}>
+          {!viewingClient && (
+            <div className="relative flex-1">
+                <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full appearance-none bg-ios-card-light dark:bg-[#1C1C1E] text-black dark:text-white py-2.5 pl-4 pr-10 rounded-2xl text-sm font-bold shadow-sm outline-none border border-transparent dark:border-white/5 focus:border-ios-blue transition-all">
+                    <option value="all">All Clients</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            </div>
+          )}
+          <button onClick={() => setShowHistory(!showHistory)} className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm border border-transparent dark:border-white/5 ${showHistory ? 'bg-ios-blue text-white' : 'bg-ios-card-light dark:bg-[#1C1C1E] text-ios-gray'} ${viewingClient ? 'w-full justify-center' : ''}`}>
              <Filter size={14} /> {showHistory ? 'History' : 'To-Do'}
           </button>
        </div>
@@ -196,7 +342,7 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
                  {/* In List Mode, showing selected Date which defaults to today. Ideally List Mode should also scroll or show range, but keeping simple for now */}
                  <div className="flex justify-between items-center px-2 mb-2">
                     <button onClick={() => setSelectedDate(addDays(selectedDate, -1))}><ChevronLeft className="text-gray-400"/></button>
-                    <span className="font-black text-lg">{format(selectedDate, 'EEEE, MMM do')}</span>
+                    <span className="font-black text-lg text-black dark:text-white">{format(selectedDate, 'EEEE, MMM do')}</span>
                     <button onClick={() => setSelectedDate(addDays(selectedDate, 1))}><ChevronRight className="text-gray-400"/></button>
                  </div>
                  
@@ -210,7 +356,7 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
                           <span className="text-sm text-black dark:text-white block">{item.session.time.split('-')[0]}</span>
                           <span className="text-[10px] text-gray-400 uppercase">{parseInt(item.session.time.split(':')[0]) >= 12 ? 'PM' : 'AM'}</span>
                       </div>
-                      <div className={`flex-1 p-4 rounded-3xl bg-white dark:bg-ios-card-dark shadow-sm border-l-8 ${item.session.status === 'completed' ? 'border-green-500' : 'border-blue-500'}`}>
+                      <div className={`flex-1 p-4 rounded-3xl bg-white dark:bg-[#1C1C1E] shadow-sm border border-gray-100 dark:border-white/5 border-l-8 ${item.session.status === 'completed' ? 'border-l-green-500' : 'border-l-blue-500'}`}>
                           <h3 className="text-lg font-black text-black dark:text-white">{item.clientName}</h3>
                           <p className="text-xs text-gray-400 font-bold">Personal Training Session</p>
                       </div>
@@ -221,54 +367,67 @@ const Schedule: React.FC<ScheduleProps> = ({ clients, onUpdateClient }) => {
        </div>
 
        {activeSession && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-             <div className="bg-white dark:bg-[#1C1C1E] w-full max-w-sm rounded-[40px] overflow-hidden shadow-2xl animate-slideUp">
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+             <div className="bg-white dark:bg-[#1C1C1E] w-full max-w-sm rounded-[40px] overflow-hidden shadow-2xl animate-slideUp border border-transparent dark:border-white/10">
                 <div className="p-8 border-b border-gray-50 dark:border-white/5 flex justify-between items-center">
                     <div>
                       <span className="font-black text-2xl block text-black dark:text-white uppercase tracking-tight">{activeSession.clientName}</span>
                       <span className="text-xs font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full">{activeSession.session.time}</span>
                     </div>
-                    <button onClick={() => setActiveSession(null)} className="p-2 bg-gray-100 dark:bg-white/5 rounded-full text-gray-400"><X size={24}/></button>
+                    <button onClick={() => setActiveSession(null)} className="p-2 bg-gray-100 dark:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors"><X size={24}/></button>
                 </div>
-                <div className="p-8 space-y-3">
-                    {isCompleting ? (
-                        <div className="space-y-6">
-                            <div>
-                                <label className="text-xs font-black uppercase text-gray-400 mb-2 block">Intensity (RPE)</label>
-                                <input type="range" min="1" max="10" step="1" value={sessionIntensity} onChange={(e) => setSessionIntensity(parseInt(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                                <div className="flex justify-between text-[10px] font-black mt-2 text-gray-500"><span>EASY</span><span>MODERATE</span><span>HARD</span></div>
-                            </div>
-                            <textarea value={sessionFeedback} onChange={(e) => setSessionFeedback(e.target.value)} placeholder="Notes for Raj..." className="w-full bg-gray-50 dark:bg-black/40 rounded-3xl p-5 text-sm outline-none h-32 resize-none" />
-                            <button onClick={() => updateStatus('completed', { intensity: sessionIntensity, feedback: sessionFeedback })} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition">COMPLETE</button>
+                
+                {/* Simplified Details for Client Mode */}
+                {viewingClient ? (
+                    <div className="p-8 space-y-4">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl">
+                             <p className="text-blue-600 dark:text-blue-400 font-bold text-center">Session Confirmed</p>
                         </div>
-                    ) : isRescheduling ? (
-                        <div className="space-y-6">
-                             <div>
-                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">New Date</label>
-                                 <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full bg-gray-100 dark:bg-white/5 p-4 rounded-2xl outline-none font-bold text-black dark:text-white" />
-                             </div>
-                             <div>
-                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">New Time</label>
-                                 <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} className="w-full bg-gray-100 dark:bg-white/5 p-4 rounded-2xl outline-none font-bold text-black dark:text-white" />
-                             </div>
-                             <button onClick={handleReschedule} className="w-full py-5 rounded-3xl bg-blue-500 text-white font-black text-lg active:scale-95 transition flex items-center justify-center gap-2">
-                                <RefreshCw size={20} /> UPDATE SCHEDULE
-                             </button>
-                             <button onClick={() => setIsRescheduling(false)} className="w-full py-3 text-gray-400 font-bold text-xs uppercase">Cancel</button>
-                        </div>
-                    ) : (
-                        <>
-                            <button onClick={() => setIsCompleting(true)} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition shadow-lg shadow-green-500/20">FINISH SESSION</button>
-                            
-                            <div className="grid grid-cols-2 gap-3">
-                                <button onClick={() => setIsRescheduling(true)} className="py-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-black text-sm active:scale-95 transition">RESCHEDULE</button>
-                                <button onClick={() => updateStatus('missed')} className="py-4 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 font-black text-sm active:scale-95 transition">MISSED</button>
+                        <p className="text-center text-gray-500 text-sm">To reschedule, please contact your coach directly.</p>
+                        <button onClick={() => setActiveSession(null)} className="w-full py-4 rounded-2xl bg-gray-100 dark:bg-white/10 font-bold text-black dark:text-white">Close</button>
+                    </div>
+                ) : (
+                    /* Full Controls for Admin */
+                    <div className="p-8 space-y-3">
+                        {isCompleting ? (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="text-xs font-black uppercase text-gray-400 mb-2 block">Intensity (RPE)</label>
+                                    <input type="range" min="1" max="10" step="1" value={sessionIntensity} onChange={(e) => setSessionIntensity(parseInt(e.target.value))} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                                    <div className="flex justify-between text-[10px] font-black mt-2 text-gray-500"><span>EASY</span><span>MODERATE</span><span>HARD</span></div>
+                                </div>
+                                <textarea value={sessionFeedback} onChange={(e) => setSessionFeedback(e.target.value)} placeholder="Notes for Raj..." className="w-full bg-gray-50 dark:bg-black/20 rounded-3xl p-5 text-sm outline-none h-32 resize-none text-black dark:text-white placeholder-gray-500" />
+                                <button onClick={() => updateStatus('completed', { intensity: sessionIntensity, feedback: sessionFeedback })} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition">COMPLETE</button>
                             </div>
-                            
-                            <button onClick={() => updateStatus('cancelled')} className="w-full py-4 rounded-2xl bg-gray-100 dark:bg-white/5 text-gray-500 font-black text-sm active:scale-95 transition">CANCEL SESSION</button>
-                        </>
-                    )}
-                </div>
+                        ) : isRescheduling ? (
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">New Date</label>
+                                    <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full bg-gray-100 dark:bg-white/5 p-4 rounded-2xl outline-none font-bold text-black dark:text-white" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">New Time</label>
+                                    <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} className="w-full bg-gray-100 dark:bg-white/5 p-4 rounded-2xl outline-none font-bold text-black dark:text-white" />
+                                </div>
+                                <button onClick={handleReschedule} className="w-full py-5 rounded-3xl bg-blue-500 text-white font-black text-lg active:scale-95 transition flex items-center justify-center gap-2">
+                                    <RefreshCw size={20} /> UPDATE SCHEDULE
+                                </button>
+                                <button onClick={() => setIsRescheduling(false)} className="w-full py-3 text-gray-400 font-bold text-xs uppercase hover:text-white transition-colors">Cancel</button>
+                            </div>
+                        ) : (
+                            <>
+                                <button onClick={() => setIsCompleting(true)} className="w-full py-5 rounded-3xl bg-green-500 text-white font-black text-lg active:scale-95 transition shadow-lg shadow-green-500/20">FINISH SESSION</button>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => setIsRescheduling(true)} className="py-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-black text-sm active:scale-95 transition hover:bg-blue-100 dark:hover:bg-blue-900/30">RESCHEDULE</button>
+                                    <button onClick={() => updateStatus('missed')} className="py-4 rounded-2xl bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 font-black text-sm active:scale-95 transition hover:bg-orange-100 dark:hover:bg-orange-900/30">MISSED</button>
+                                </div>
+                                
+                                <button onClick={() => updateStatus('cancelled')} className="w-full py-4 rounded-2xl bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-gray-400 font-black text-sm active:scale-95 transition hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-white">CANCEL SESSION</button>
+                            </>
+                        )}
+                    </div>
+                )}
              </div>
           </div>
        )}

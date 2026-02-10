@@ -1,28 +1,34 @@
 
 import React, { useState, useEffect } from 'react';
-import { Client, PlanTemplate, DietMeal, WorkoutDay } from '../types';
+import { Client, PlanTemplate, DietMeal, WorkoutDay, FoodItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-// Added Utensils to the import list to fix the reference on line 267
-import { Search, Plus, Trash2, FileText, Download, ChevronRight, Save, ArrowLeft, Copy, Printer, Eye, X, Utensils } from 'lucide-react';
+import { Search, Plus, Trash2, FileText, Download, ChevronRight, Save, ArrowLeft, Copy, Printer, Eye, X, Utensils, Book } from 'lucide-react';
 import PlanBuilder from './PlanBuilder';
 import PlanPDF from './PlanPDF';
-import { saveTemplates, loadTemplates } from '../services/storage';
+import { saveTemplates, loadTemplates, saveFoodLibrary, loadFoodLibrary } from '../services/storage';
 
 interface PlanManagerProps {
   clients: Client[];
   onUpdateClient: (client: Client) => void;
+  viewingClient?: Client; // Client Mode prop
 }
 
-const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) => {
-  const [activeTab, setActiveTab] = useState<'templates' | 'clients'>('templates');
+const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, viewingClient }) => {
+  // If viewingClient is present, default to 'clients' tab (which we will repurpose as 'My Plan')
+  const [activeTab, setActiveTab] = useState<'templates' | 'clients' | 'library'>(viewingClient ? 'clients' : 'templates');
   const [templateType, setTemplateType] = useState<'diet' | 'workout'>('diet');
   const [templates, setTemplates] = useState<PlanTemplate[]>([]);
+  const [foodLibrary, setFoodLibrary] = useState<FoodItem[]>([]);
   
   // Editor State
   const [editingTemplate, setEditingTemplate] = useState<PlanTemplate | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editorData, setEditorData] = useState<DietMeal[] | WorkoutDay[]>([]);
   const [templateName, setTemplateName] = useState('');
+
+  // Food Library Inputs
+  const [newFood, setNewFood] = useState<FoodItem>({ id: '', name: '', servingSize: '', calories: '', protein: '', carbs: '', fats: '' });
+  const [showAddFood, setShowAddFood] = useState(false);
 
   // Save as Template Modal
   const [showSaveAsTemplate, setShowSaveAsTemplate] = useState(false);
@@ -37,7 +43,27 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
 
   useEffect(() => {
     setTemplates(loadTemplates());
+    setFoodLibrary(loadFoodLibrary());
   }, []);
+
+  // --- Food Library Logic ---
+  const handleAddFood = () => {
+    if (!newFood.name || !newFood.calories) return alert("Name and Calories are required");
+    const item: FoodItem = { ...newFood, id: uuidv4() };
+    const updated = [...foodLibrary, item];
+    setFoodLibrary(updated);
+    saveFoodLibrary(updated);
+    setNewFood({ id: '', name: '', servingSize: '', calories: '', protein: '', carbs: '', fats: '' });
+    setShowAddFood(false);
+  };
+
+  const handleDeleteFood = (id: string) => {
+    const updated = foodLibrary.filter(f => f.id !== id);
+    setFoodLibrary(updated);
+    saveFoodLibrary(updated);
+  };
+
+  // --- Template Logic ---
 
   const handleSaveTemplate = () => {
       if(!templateName) return alert("Enter template name");
@@ -124,6 +150,22 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
   };
 
   const startEditClient = (c: Client) => {
+      if (viewingClient) {
+          // In Client View, clicking usually does nothing or opens a read-only view. 
+          // But we will use the PDF preview for the read-only view.
+          const hasDiet = Array.isArray(c.dietPlan) && c.dietPlan.length > 0;
+          const hasWorkout = Array.isArray(c.workoutRoutine) && c.workoutRoutine.length > 0;
+          if (hasDiet || hasWorkout) {
+               setShowPdf({ 
+                    type: (hasDiet && hasWorkout) ? 'full' : (hasDiet ? 'diet' : 'workout'), 
+                    clientName: c.name, 
+                    data: undefined, 
+                    client: c
+               });
+          }
+          return;
+      }
+
       setEditingClient(c);
       // Load existing data or empty
       const existing = templateType === 'diet' ? c.dietPlan : c.workoutRoutine;
@@ -209,7 +251,7 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
                   )}
 
                   {/* Builder */}
-                  <PlanBuilder type={templateType} data={editorData} onChange={setEditorData} />
+                  <PlanBuilder type={templateType} data={editorData} onChange={setEditorData} foodLibrary={foodLibrary} />
 
                   {/* Footer Action: Save as Template */}
                   {editingClient && editorData.length > 0 && (
@@ -242,17 +284,78 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
   return (
     <div className="animate-fadeIn min-h-screen">
       <div className="pt-2 px-1 mb-4 flex justify-between items-end">
-         <h1 className="text-[34px] font-black text-black dark:text-white leading-tight tracking-tight">Plans</h1>
-         <button onClick={startCreateTemplate} className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition mb-1">
-             <Plus size={24} />
-         </button>
+         <h1 className="text-[34px] font-black text-black dark:text-white leading-tight tracking-tight">{viewingClient ? 'My Plan' : 'Plans'}</h1>
+         {!viewingClient && (
+            <button onClick={() => activeTab === 'library' ? setShowAddFood(true) : startCreateTemplate()} className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition mb-1">
+                <Plus size={24} />
+            </button>
+         )}
       </div>
 
-      {/* Main Tabs */}
-      <div className="flex p-1 bg-gray-200 dark:bg-gray-800 rounded-2xl mb-6">
-          <button onClick={() => setActiveTab('templates')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'templates' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>Samples</button>
-          <button onClick={() => setActiveTab('clients')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'clients' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>My Clients</button>
-      </div>
+      {/* Main Tabs (Hidden in Client Mode) */}
+      {!viewingClient && (
+          <div className="flex p-1 bg-gray-200 dark:bg-gray-800 rounded-2xl mb-6">
+              <button onClick={() => setActiveTab('templates')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'templates' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>Samples</button>
+              <button onClick={() => setActiveTab('clients')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'clients' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>My Clients</button>
+              <button onClick={() => setActiveTab('library')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'library' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>Food Lib</button>
+          </div>
+      )}
+
+      {/* --- FOOD LIBRARY TAB --- */}
+      {activeTab === 'library' && (
+         <div className="space-y-4">
+            <div className="relative mb-6">
+                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                 <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search foods..." className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
+            </div>
+
+            <div className="grid gap-3">
+               {foodLibrary.filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase())).map(food => (
+                  <div key={food.id} className="bg-white dark:bg-[#1C1C1E] p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 flex justify-between items-center group">
+                     <div>
+                        <div className="flex items-center gap-2">
+                           <h3 className="font-bold text-black dark:text-white">{food.name}</h3>
+                           <span className="text-[10px] bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded-full text-gray-500">{food.servingSize}</span>
+                        </div>
+                        <div className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-wider flex gap-3">
+                             <span>{food.calories} kcal</span>
+                             <span className="text-blue-500">P:{food.protein}</span>
+                             <span className="text-orange-500">C:{food.carbs}</span>
+                             <span className="text-yellow-500">F:{food.fats}</span>
+                        </div>
+                     </div>
+                     <button onClick={() => handleDeleteFood(food.id)} className="p-2 bg-gray-50 dark:bg-white/5 text-gray-400 hover:text-red-600 rounded-full transition"><Trash2 size={16}/></button>
+                  </div>
+               ))}
+               {foodLibrary.length === 0 && <div className="text-center py-10 text-gray-400 italic">No foods in library. Tap + to add.</div>}
+            </div>
+
+            {/* Add Food Modal */}
+            {showAddFood && (
+               <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+                   <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-[40px] w-full max-w-sm shadow-2xl animate-slideUp">
+                       <h3 className="text-2xl font-black text-black dark:text-white mb-4 uppercase tracking-tight">Add Food</h3>
+                       <div className="space-y-3">
+                           <input type="text" placeholder="Food Name (e.g. Chicken Breast)" value={newFood.name} onChange={e => setNewFood({...newFood, name: e.target.value})} className="w-full bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none" />
+                           <div className="grid grid-cols-2 gap-3">
+                               <input type="text" placeholder="Serving (e.g. 100g)" value={newFood.servingSize} onChange={e => setNewFood({...newFood, servingSize: e.target.value})} className="bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none" />
+                               <input type="number" placeholder="Calories" value={newFood.calories} onChange={e => setNewFood({...newFood, calories: e.target.value})} className="bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none" />
+                           </div>
+                           <div className="grid grid-cols-3 gap-3">
+                               <input type="number" placeholder="Prot (g)" value={newFood.protein} onChange={e => setNewFood({...newFood, protein: e.target.value})} className="bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none text-blue-500 placeholder-blue-300" />
+                               <input type="number" placeholder="Carb (g)" value={newFood.carbs} onChange={e => setNewFood({...newFood, carbs: e.target.value})} className="bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none text-orange-500 placeholder-orange-300" />
+                               <input type="number" placeholder="Fat (g)" value={newFood.fats} onChange={e => setNewFood({...newFood, fats: e.target.value})} className="bg-gray-100 dark:bg-white/5 p-3 rounded-2xl outline-none text-yellow-500 placeholder-yellow-300" />
+                           </div>
+                       </div>
+                       <div className="flex gap-3 mt-6">
+                           <button onClick={() => setShowAddFood(false)} className="flex-1 py-3 bg-gray-100 dark:bg-gray-800 rounded-2xl font-bold text-gray-500">Cancel</button>
+                           <button onClick={handleAddFood} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20">Add Food</button>
+                       </div>
+                   </div>
+               </div>
+            )}
+         </div>
+      )}
 
       {activeTab === 'templates' && (
           <div className="space-y-6">
@@ -293,15 +396,20 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
 
       {activeTab === 'clients' && (
           <div className="space-y-4">
-              <div className="relative mb-6">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                  <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search client plans..." className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
-              </div>
+              {!viewingClient && (
+                  <div className="relative mb-6">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search client plans..." className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
+                  </div>
+              )}
 
               {clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => {
                   const hasDiet = Array.isArray(c.dietPlan) && c.dietPlan.length > 0;
                   const hasWorkout = Array.isArray(c.workoutRoutine) && c.workoutRoutine.length > 0;
                   
+                  // In Client Mode, verify this is the active client
+                  if (viewingClient && c.id !== viewingClient.id) return null;
+
                   return (
                     <div key={c.id} onClick={() => startEditClient(c)} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[32px] shadow-sm border border-gray-100 dark:border-white/5 flex justify-between items-center cursor-pointer active:scale-[0.99] transition">
                         <div className="flex items-center gap-4">
@@ -309,7 +417,7 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
                                 {c.name.charAt(0)}
                             </div>
                             <div>
-                                <h3 className="font-black text-black dark:text-white text-lg leading-none mb-1">{c.name}</h3>
+                                <h3 className="font-black text-black dark:text-white text-lg leading-none mb-1">{viewingClient ? "Your Active Plan" : c.name}</h3>
                                 <div className="flex gap-2">
                                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${hasDiet ? 'bg-green-100 text-green-700 dark:bg-green-900/30' : 'bg-gray-100 text-gray-400 dark:bg-white/5'}`}>Nutrition</span>
                                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${hasWorkout ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30' : 'bg-gray-100 text-gray-400 dark:bg-white/5'}`}>Training</span>
@@ -328,12 +436,13 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient }) =>
                                             client: c
                                         }); 
                                     }} 
-                                    className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-2xl hover:bg-blue-100 transition shadow-sm border border-blue-100 dark:border-blue-900/30"
+                                    className={`p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-2xl hover:bg-blue-100 transition shadow-sm border border-blue-100 dark:border-blue-900/30 ${viewingClient ? 'px-6 flex gap-2 font-bold text-xs items-center' : ''}`}
                                  >
                                      <Download size={18} />
+                                     {viewingClient && <span>View Plan</span>}
                                  </button>
                              )}
-                            <ChevronRight size={20} className="text-gray-300"/>
+                             {!viewingClient && <ChevronRight size={20} className="text-gray-300"/>}
                         </div>
                     </div>
                   );

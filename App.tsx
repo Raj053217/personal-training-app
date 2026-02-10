@@ -1,8 +1,10 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { Client, NavPage } from './types';
 import { saveClients, getInitialData, saveClientsToCloud, loadClientsFromCloud } from './services/storage';
-import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, Plus, Loader2, BookOpen } from 'lucide-react';
-import Dashboard from './components/Dashboard';
+import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, Plus, Loader2, BookOpen, LogOut } from 'lucide-react';
+import { Dashboard } from './components/Dashboard';
 import ClientList from './components/ClientList';
 import ClientForm from './components/ClientForm';
 import Schedule from './components/Schedule';
@@ -18,6 +20,9 @@ const App: React.FC = () => {
   const [editingClient, setEditingClient] = useState<Client | undefined>(undefined);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currency, setCurrency] = useState('₹');
+
+  // Client View Mode State
+  const [activeClient, setActiveClient] = useState<Client | null>(null);
 
   // History State for Undo/Redo
   const [history, setHistory] = useState<Client[][]>([]);
@@ -179,6 +184,18 @@ const App: React.FC = () => {
     setCurrentPage(NavPage.ADD_CLIENT);
   };
 
+  const enterClientMode = (client: Client) => {
+      setActiveClient(client);
+      setCurrentPage(NavPage.DASHBOARD);
+  };
+
+  const exitClientMode = () => {
+      if (window.confirm("Exit Client View?")) {
+          setActiveClient(null);
+          setCurrentPage(NavPage.DASHBOARD);
+      }
+  };
+
   const TabButton = ({ page, icon: Icon, label }: { page: NavPage, icon: any, label: string }) => (
     <button
       onClick={() => setCurrentPage(page)}
@@ -204,41 +221,98 @@ const App: React.FC = () => {
     <div className={`min-h-screen font-sans antialiased selection:bg-ios-blue selection:text-white`}>
       
       {/* Main Content Area */}
-      <main className={`w-full max-w-2xl mx-auto pb-24 px-4 safe-top pt-8 safe-bottom min-h-screen`}>
-        {currentPage === NavPage.DASHBOARD && <Dashboard clients={clients} navigateTo={setCurrentPage} currency={currency} />}
-        {currentPage === NavPage.CLIENTS && (
-            <ClientList 
-                clients={clients} 
-                onEdit={(c) => { setEditingClient(c); setCurrentPage(NavPage.ADD_CLIENT); }} 
-                onDelete={handleDeleteClient} 
-                onAdd={startAdd} 
-                currency={currency} 
-            />
+      <main className={`w-full max-w-2xl mx-auto pb-24 px-4 safe-top pt-8 safe-bottom min-h-screen relative`}>
+        {/* Admin Mode Components */}
+        {!activeClient && (
+            <>
+                {currentPage === NavPage.DASHBOARD && <Dashboard clients={clients} navigateTo={setCurrentPage} currency={currency} />}
+                {currentPage === NavPage.CLIENTS && (
+                    <ClientList 
+                        clients={clients} 
+                        onEdit={(c) => { setEditingClient(c); setCurrentPage(NavPage.ADD_CLIENT); }} 
+                        onDelete={handleDeleteClient} 
+                        onAdd={startAdd} 
+                        currency={currency} 
+                    />
+                )}
+                {currentPage === NavPage.PLANS && <PlanManager clients={clients} onUpdateClient={handleSaveClient} />}
+                {currentPage === NavPage.SCHEDULE && <Schedule clients={clients} onUpdateClient={handleSaveClient} />}
+                {currentPage === NavPage.SETTINGS && (
+                    <Settings 
+                        clients={clients} // Passed for Client View Switcher
+                        isDarkMode={isDarkMode} 
+                        toggleTheme={() => setIsDarkMode(!isDarkMode)} 
+                        currency={currency} 
+                        setCurrency={setCurrency} 
+                        onRestore={(d) => updateClients(d)}
+                        undo={undo}
+                        redo={redo}
+                        canUndo={historyIndex > 0}
+                        canRedo={historyIndex < history.length - 1}
+                        onEnterClientMode={enterClientMode}
+                    />
+                )}
+                {currentPage === NavPage.ADD_CLIENT && (
+                    <ClientForm 
+                        onSave={handleSaveClient} 
+                        onCancel={() => setCurrentPage(NavPage.CLIENTS)} 
+                        initialData={editingClient} 
+                        currency={currency} 
+                    />
+                )}
+            </>
         )}
-        {currentPage === NavPage.PLANS && <PlanManager clients={clients} onUpdateClient={handleSaveClient} />}
-        {currentPage === NavPage.SCHEDULE && <Schedule clients={clients} onUpdateClient={handleSaveClient} />}
-        {currentPage === NavPage.SETTINGS && (
-            <Settings 
-                isDarkMode={isDarkMode} 
-                toggleTheme={() => setIsDarkMode(!isDarkMode)} 
-                currency={currency} 
-                setCurrency={setCurrency} 
-                onRestore={(d) => updateClients(d)}
-                undo={undo}
-                redo={redo}
-                canUndo={historyIndex > 0}
-                canRedo={historyIndex < history.length - 1}
-            />
+
+        {/* Client Mode Components (Filtered View) */}
+        {activeClient && (
+            <>
+                 {/* Client Top Bar */}
+                 <div className="flex justify-between items-center mb-6 pt-2">
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-lg shadow-lg">
+                             {activeClient.name.charAt(0)}
+                        </div>
+                        <div>
+                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Client Mode</p>
+                             <h2 className="text-lg font-black text-black dark:text-white leading-none">{activeClient.name}</h2>
+                        </div>
+                     </div>
+                     <button onClick={exitClientMode} className="p-2 bg-gray-200 dark:bg-gray-800 rounded-full text-gray-500 hover:text-red-500 transition">
+                         <LogOut size={20} />
+                     </button>
+                 </div>
+
+                 {currentPage === NavPage.DASHBOARD && <Dashboard clients={[activeClient]} navigateTo={setCurrentPage} currency={currency} viewingClient={activeClient} />}
+                 {currentPage === NavPage.SCHEDULE && <Schedule clients={[activeClient]} onUpdateClient={() => {}} />}
+                 {currentPage === NavPage.PLANS && <PlanManager clients={[activeClient]} onUpdateClient={() => {}} viewingClient={activeClient} />}
+                 {/* Reusing Dashboard as Profile page for client for now, or could act as 'Settings' */}
+                 {currentPage === NavPage.SETTINGS && (
+                      <div className="animate-fadeIn">
+                          <h1 className="text-[34px] font-bold text-black dark:text-white mb-6">Profile</h1>
+                          <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-[32px] shadow-sm space-y-4">
+                              <div>
+                                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Full Name</label>
+                                  <p className="text-lg font-bold text-black dark:text-white">{activeClient.name}</p>
+                              </div>
+                              <div>
+                                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Email</label>
+                                  <p className="text-lg font-medium text-black dark:text-white">{activeClient.email || 'N/A'}</p>
+                              </div>
+                              <div>
+                                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Phone</label>
+                                  <p className="text-lg font-medium text-black dark:text-white">{activeClient.phone || 'N/A'}</p>
+                              </div>
+                              <div>
+                                  <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Cycle Expiry</label>
+                                  <p className="text-lg font-medium text-black dark:text-white">{activeClient.expiryDate}</p>
+                              </div>
+                          </div>
+                          <button onClick={exitClientMode} className="w-full mt-6 py-4 bg-red-50 dark:bg-red-900/20 text-red-600 font-bold rounded-2xl">Log Out (Exit View)</button>
+                      </div>
+                 )}
+            </>
         )}
-        
-        {currentPage === NavPage.ADD_CLIENT && (
-          <ClientForm 
-            onSave={handleSaveClient} 
-            onCancel={() => setCurrentPage(NavPage.CLIENTS)} 
-            initialData={editingClient} 
-            currency={currency} 
-          />
-        )}
+
       </main>
 
       {/* iOS Translucent Tab Bar */}
@@ -246,10 +320,10 @@ const App: React.FC = () => {
         <nav className="fixed bottom-0 w-full z-40 ios-blur border-t border-ios-separator-light/50 dark:border-ios-separator-dark/50 pb-safe safe-bottom no-print">
           <div className="flex justify-around items-center h-[50px] max-w-2xl mx-auto pt-1">
             <TabButton page={NavPage.DASHBOARD} icon={LayoutDashboard} label="Home" />
-            <TabButton page={NavPage.PLANS} icon={BookOpen} label="Plans" />
+            <TabButton page={NavPage.PLANS} icon={BookOpen} label={activeClient ? "My Plan" : "Plans"} />
             <TabButton page={NavPage.SCHEDULE} icon={Calendar} label="Schedule" />
-            <TabButton page={NavPage.CLIENTS} icon={Users} label="Clients" />
-            <TabButton page={NavPage.SETTINGS} icon={SettingsIcon} label="Settings" />
+            {!activeClient && <TabButton page={NavPage.CLIENTS} icon={Users} label="Clients" />}
+            <TabButton page={NavPage.SETTINGS} icon={activeClient ? Users : SettingsIcon} label={activeClient ? "Profile" : "Settings"} />
           </div>
         </nav>
       )}

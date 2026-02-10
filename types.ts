@@ -47,6 +47,16 @@ export interface DietMeal {
   notes?: string; // New: Preparation instructions or notes
 }
 
+export interface FoodItem {
+  id: string;
+  name: string;
+  servingSize: string;
+  calories: string;
+  protein: string;
+  carbs: string;
+  fats: string;
+}
+
 export interface WorkoutExercise {
   id: string;
   name: string;
@@ -55,6 +65,9 @@ export interface WorkoutExercise {
   rest?: string; // New: Rest time (e.g., "60s")
   rpe?: string;  // New: Target RPE (e.g., "8")
   notes?: string;
+  equipmentNeeded?: string;
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
+  videoUrl?: string;
 }
 
 export interface WorkoutDay {

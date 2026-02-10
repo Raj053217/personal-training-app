@@ -1,16 +1,22 @@
-import React from 'react';
-import { DietMeal, WorkoutDay, DietItem, WorkoutExercise } from '../types';
+
+import React, { useState } from 'react';
+import { DietMeal, WorkoutDay, DietItem, WorkoutExercise, FoodItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, X, Utensils, Activity, FileText } from 'lucide-react';
+import { Plus, Trash2, X, Utensils, Activity, FileText, Dumbbell, Signal, Video, Search, Book } from 'lucide-react';
 
 interface PlanBuilderProps {
   type: 'diet' | 'workout';
   data: DietMeal[] | WorkoutDay[];
   onChange: (data: any[]) => void;
+  foodLibrary?: FoodItem[]; // New Prop
 }
 
-const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange }) => {
+const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange, foodLibrary = [] }) => {
   
+  // State for Food Library Picker
+  const [showFoodPicker, setShowFoodPicker] = useState<{ mealId: string } | null>(null);
+  const [foodSearch, setFoodSearch] = useState('');
+
   // --- Diet Helpers ---
   const addMeal = () => onChange([...data, { id: uuidv4(), name: 'New Meal', items: [] }]);
   
@@ -22,6 +28,22 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange }) 
   
   const addDietItem = (mealId: string) => {
       onChange((data as DietMeal[]).map(m => m.id === mealId ? { ...m, items: [...m.items, { id: uuidv4(), food: '', portion: '', calories: '', protein: '', carbs: '', fats: '' }] } : m));
+  };
+
+  const addDietItemFromLibrary = (mealId: string, food: FoodItem) => {
+      onChange((data as DietMeal[]).map(m => m.id === mealId ? { 
+          ...m, 
+          items: [...m.items, { 
+              id: uuidv4(), 
+              food: food.name, 
+              portion: food.servingSize, 
+              calories: food.calories, 
+              protein: food.protein, 
+              carbs: food.carbs, 
+              fats: food.fats 
+          }] 
+      } : m));
+      setShowFoodPicker(null);
   };
   
   const updateDietItem = (mealId: string, itemId: string, field: keyof DietItem, val: string) => {
@@ -44,7 +66,7 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange }) 
   const removeWorkoutDay = (id: string) => onChange((data as WorkoutDay[]).filter(d => d.id !== id));
 
   const addExercise = (dayId: string) => {
-      onChange((data as WorkoutDay[]).map(d => d.id === dayId ? { ...d, exercises: [...d.exercises, { id: uuidv4(), name: '', sets: '3', reps: '10', rest: '', rpe: '', notes: '' }] } : d));
+      onChange((data as WorkoutDay[]).map(d => d.id === dayId ? { ...d, exercises: [...d.exercises, { id: uuidv4(), name: '', sets: '3', reps: '10', rest: '', rpe: '', notes: '', equipmentNeeded: '', difficulty: 'intermediate', videoUrl: '' }] } : d));
   };
   
   const updateExercise = (dayId: string, exId: string, field: keyof WorkoutExercise, val: string) => {
@@ -98,7 +120,10 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange }) 
                                     </div>
                                 </div>
                             ))}
-                            <button onClick={() => addDietItem(meal.id)} className="text-xs font-bold text-blue-500 flex items-center gap-1 mt-2"><Plus size={14}/> Add Item</button>
+                            <div className="flex gap-2 mt-2">
+                                <button onClick={() => addDietItem(meal.id)} className="text-xs font-bold text-blue-500 flex items-center gap-1"><Plus size={14}/> Custom Item</button>
+                                <button onClick={() => setShowFoodPicker({ mealId: meal.id })} className="text-xs font-bold text-purple-500 flex items-center gap-1"><Book size={14}/> Add from Library</button>
+                            </div>
                             
                             {/* Detailed Notes Field */}
                             <div className="mt-3 relative">
@@ -115,6 +140,36 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange }) 
                 );
             })}
             <button onClick={addMeal} className="w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl text-gray-500 font-bold flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-white/5 transition"><Utensils size={18}/> Add Meal</button>
+
+            {/* Library Picker Modal */}
+            {showFoodPicker && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+                    <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-[40px] w-full max-w-sm shadow-2xl animate-slideUp max-h-[80vh] flex flex-col">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-black text-black dark:text-white uppercase tracking-tight">Select Food</h3>
+                            <button onClick={() => { setShowFoodPicker(null); setFoodSearch(''); }} className="p-1 text-gray-400 hover:text-red-500"><X size={20}/></button>
+                        </div>
+                        
+                        <div className="relative mb-4">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                            <input type="text" value={foodSearch} onChange={e => setFoodSearch(e.target.value)} placeholder="Search library..." className="w-full bg-gray-100 dark:bg-white/5 pl-10 pr-4 py-3 rounded-2xl outline-none" autoFocus />
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                             {foodLibrary.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase())).map(food => (
+                                 <button key={food.id} onClick={() => addDietItemFromLibrary(showFoodPicker.mealId, food)} className="w-full text-left p-3 rounded-2xl bg-gray-50 dark:bg-white/5 hover:bg-blue-50 dark:hover:bg-blue-900/20 active:scale-95 transition">
+                                     <p className="font-bold text-sm text-black dark:text-white">{food.name}</p>
+                                     <p className="text-[10px] text-gray-500 font-medium">
+                                        {food.calories} kcal • P:{food.protein} C:{food.carbs} F:{food.fats} • {food.servingSize}
+                                     </p>
+                                 </button>
+                             ))}
+                             {foodLibrary.length === 0 && <p className="text-center text-xs text-gray-400 py-4">Library is empty. Add foods in the Library tab.</p>}
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
       );
   } else {
@@ -163,6 +218,27 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange }) 
                                             <input type="text" value={ex.rpe || ''} onChange={(e) => updateExercise(day.id, ex.id, 'rpe', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="8" />
                                         </div>
                                     </div>
+
+                                    {/* Advanced Fields: Equipment, Difficulty, Video */}
+                                    <div className="grid grid-cols-3 gap-2 mb-2">
+                                         <div className="relative bg-white dark:bg-white/5 rounded-lg p-1.5 flex items-center">
+                                            <Dumbbell size={10} className="absolute left-2 text-gray-400"/>
+                                            <input type="text" value={ex.equipmentNeeded || ''} onChange={(e) => updateExercise(day.id, ex.id, 'equipmentNeeded', e.target.value)} className="w-full bg-transparent pl-4 text-[10px] outline-none" placeholder="Equipment" />
+                                         </div>
+                                         <div className="relative bg-white dark:bg-white/5 rounded-lg p-1.5 flex items-center">
+                                            <Signal size={10} className="absolute left-2 text-gray-400"/>
+                                            <select value={ex.difficulty || 'intermediate'} onChange={(e) => updateExercise(day.id, ex.id, 'difficulty', e.target.value)} className="w-full bg-transparent pl-4 text-[10px] outline-none appearance-none">
+                                                <option value="beginner">Beginner</option>
+                                                <option value="intermediate">Intermediate</option>
+                                                <option value="advanced">Advanced</option>
+                                            </select>
+                                         </div>
+                                         <div className="relative bg-white dark:bg-white/5 rounded-lg p-1.5 flex items-center">
+                                            <Video size={10} className="absolute left-2 text-gray-400"/>
+                                            <input type="text" value={ex.videoUrl || ''} onChange={(e) => updateExercise(day.id, ex.id, 'videoUrl', e.target.value)} className="w-full bg-transparent pl-4 text-[10px] outline-none" placeholder="Video URL" />
+                                         </div>
+                                    </div>
+
                                     <input type="text" value={ex.notes || ''} onChange={(e) => updateExercise(day.id, ex.id, 'notes', e.target.value)} className="w-full bg-transparent text-xs text-gray-500 outline-none italic" placeholder="Notes (e.g. slow tempo, dropset...)" />
                             </div>
                         ))}

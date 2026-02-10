@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { Client, DietMeal, WorkoutDay } from '../types';
 import { format } from 'date-fns';
-import { X, Download, Loader2, Dumbbell, Utensils, Info, Printer } from 'lucide-react';
+import { X, Download, Loader2, Dumbbell, Utensils, Info, Printer, ExternalLink, Signal } from 'lucide-react';
 
 interface PlanPDFProps {
   client: Client;
@@ -151,7 +152,20 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
                         <tbody className="divide-y divide-gray-100">
                             {day.exercises.map((ex, i) => (
                                 <tr key={i} className="even:bg-gray-50/30">
-                                    <td className="px-4 py-3 font-bold text-gray-800">{ex.name}</td>
+                                    <td className="px-4 py-3">
+                                        <p className="font-bold text-gray-800">{ex.name}</p>
+                                        {(ex.equipmentNeeded || ex.difficulty) && (
+                                            <div className="flex flex-wrap gap-2 mt-1">
+                                                {ex.equipmentNeeded && <span className="text-[9px] text-gray-500 bg-gray-100 px-1.5 rounded border border-gray-200">{ex.equipmentNeeded}</span>}
+                                                {ex.difficulty && <span className={`text-[9px] px-1.5 rounded border ${ex.difficulty === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : ex.difficulty === 'intermediate' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' : 'bg-green-50 text-green-600 border-green-100'} uppercase`}>{ex.difficulty.substring(0,3)}</span>}
+                                            </div>
+                                        )}
+                                        {ex.videoUrl && (
+                                            <a href={ex.videoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500 hover:underline">
+                                                <ExternalLink size={8} /> Video
+                                            </a>
+                                        )}
+                                    </td>
                                     <td className="px-2 py-3 text-center font-bold text-blue-600">{ex.sets}</td>
                                     <td className="px-2 py-3 text-center font-bold text-gray-600">{ex.reps}</td>
                                     <td className="px-2 py-3 text-center text-xs text-gray-500">{ex.rest || '-'}</td>

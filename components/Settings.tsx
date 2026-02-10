@@ -1,9 +1,11 @@
+
 import React, { useRef, useState, useEffect } from 'react';
-import { Moon, Sun, DollarSign, ChevronRight, Smartphone, Upload, Download, Bell, LogOut, User, RotateCcw, RotateCw } from 'lucide-react';
+import { Moon, Sun, DollarSign, ChevronRight, Smartphone, Upload, Download, Bell, LogOut, User, RotateCcw, RotateCw, Eye } from 'lucide-react';
 import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SettingsProps {
+  clients?: Client[]; // Added clients to populate dropdown
   isDarkMode: boolean;
   toggleTheme: () => void;
   currency: string;
@@ -13,11 +15,13 @@ interface SettingsProps {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onEnterClientMode?: (client: Client) => void; // Callback
 }
 
-const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, setCurrency, onRestore, undo, redo, canUndo, canRedo }) => {
+const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleTheme, currency, setCurrency, onRestore, undo, redo, canUndo, canRedo, onEnterClientMode }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [selectedClientForView, setSelectedClientForView] = useState('');
   const { user, login, logout } = useAuth();
 
   useEffect(() => {
@@ -72,6 +76,13 @@ const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, 
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsText(file);
+  };
+
+  const handleEnterClientMode = () => {
+     const client = clients.find(c => c.id === selectedClientForView);
+     if (client && onEnterClientMode) {
+         onEnterClientMode(client);
+     }
   };
   
   const SettingItem = ({ 
@@ -133,7 +144,7 @@ const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, 
          <h1 className="text-[34px] font-bold text-black dark:text-white leading-tight">Settings</h1>
       </div>
 
-      {/* Account Section (New) */}
+      {/* Account Section */}
       <div>
          <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Account</h3>
          <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
@@ -179,6 +190,31 @@ const Settings: React.FC<SettingsProps> = ({ isDarkMode, toggleTheme, currency, 
          <p className="px-4 mt-2 text-[13px] text-ios-gray">
             {user ? "Your data is backed up to the cloud." : "Sign in to sync your data across devices."}
          </p>
+      </div>
+
+      {/* Client View Mode Switcher (New) */}
+      <div>
+         <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Client View Mode</h3>
+         <div className="bg-ios-card-light dark:bg-ios-card-dark rounded-[10px] overflow-hidden shadow-sm p-3.5">
+             <div className="flex gap-2">
+                 <select 
+                   value={selectedClientForView} 
+                   onChange={(e) => setSelectedClientForView(e.target.value)}
+                   className="flex-1 bg-gray-100 dark:bg-black/20 text-black dark:text-white rounded-lg px-3 py-2 text-sm outline-none border border-transparent focus:border-blue-500"
+                 >
+                     <option value="">Select Client...</option>
+                     {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                 </select>
+                 <button 
+                    onClick={handleEnterClientMode}
+                    disabled={!selectedClientForView}
+                    className="bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm"
+                 >
+                    Switch
+                 </button>
+             </div>
+             <p className="mt-2 text-[11px] text-gray-400">Restricts the app to a read-only view for the selected client. Useful for sharing screen or kiosk mode.</p>
+         </div>
       </div>
       
       {/* Edit History */}

@@ -1,9 +1,11 @@
-import { Client, PlanTemplate } from '../types';
+
+import { Client, PlanTemplate, FoodItem } from '../types';
 import { db } from './firebase';
 import { doc, setDoc, getDoc } from "firebase/firestore";
 
 const STORAGE_KEY = 'pt_manage_pro_data';
 const TEMPLATE_KEY = 'pt_manage_pro_templates';
+const FOOD_LIBRARY_KEY = 'pt_manage_pro_food_library';
 
 // --- Local Storage (Clients) ---
 
@@ -49,6 +51,26 @@ export const loadTemplates = (): PlanTemplate[] => {
     if (data) return JSON.parse(data);
   } catch (e) {
     console.error("Failed to load templates", e);
+  }
+  return [];
+};
+
+// --- Local Storage (Food Library) ---
+
+export const saveFoodLibrary = (foods: FoodItem[]) => {
+  try {
+    localStorage.setItem(FOOD_LIBRARY_KEY, JSON.stringify(foods));
+  } catch (e) {
+    console.error("Failed to save food library", e);
+  }
+};
+
+export const loadFoodLibrary = (): FoodItem[] => {
+  try {
+    const data = localStorage.getItem(FOOD_LIBRARY_KEY);
+    if (data) return JSON.parse(data);
+  } catch (e) {
+    console.error("Failed to load food library", e);
   }
   return [];
 };
