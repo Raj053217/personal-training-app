@@ -82,9 +82,9 @@ export const saveClientMapping = async (email: string, coachId: string) => {
   if (!db || !email) return;
   try {
       // Use email as doc ID for easy lookup (lowercase to normalize)
-      await setDoc(doc(db, "client_mappings", email.toLowerCase()), {
+      await setDoc(doc(db, "client_mappings", email.toLowerCase().trim()), {
           coachId: coachId,
-          email: email.toLowerCase()
+          email: email.toLowerCase().trim()
       });
   } catch (e) {
       console.error("Failed to save mapping", e);
@@ -95,7 +95,7 @@ export const saveClientMapping = async (email: string, coachId: string) => {
 export const getCoachIdForClient = async (email: string): Promise<string | null> => {
     if (!db || !email) return null;
     try {
-        const docSnap = await getDoc(doc(db, "client_mappings", email.toLowerCase()));
+        const docSnap = await getDoc(doc(db, "client_mappings", email.toLowerCase().trim()));
         if (docSnap.exists()) {
             return docSnap.data().coachId;
         }

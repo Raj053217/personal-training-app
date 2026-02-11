@@ -16,13 +16,15 @@ const App: React.FC = () => {
   const { user, loading: authLoading, role, coachId, logout } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState<NavPage>(NavPage.DASHBOARD);
+  // Default to CLIENTS page as requested for "adding client details"
+  const [currentPage, setCurrentPage] = useState<NavPage>(NavPage.CLIENTS);
   const [editingClient, setEditingClient] = useState<Client | undefined>(undefined);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currency, setCurrency] = useState('₹');
 
   // Client View Mode State
   const [activeClient, setActiveClient] = useState<Client | null>(null);
+  const [noProfileFound, setNoProfileFound] = useState(false);
 
   // History State for Undo/Redo
   const [history, setHistory] = useState<Client[][]>([]);
@@ -90,11 +92,28 @@ const App: React.FC = () => {
 
   // Data Loading Logic
   useEffect(() => {
+    // 1. Wait for Auth to initialize
+    if (authLoading) return;
+
+    // 2. If no user, we are done loading (show login screen)
+    if (!user) {
+        setDataLoading(false);
+        return;
+    }
+
     const initData = async () => {
         setDataLoading(true);
-        let initialClients: Client[] = [];
+        setNoProfileFound(false);
+        try {
+            let initialClients: Client[] = [];
 
-        if (user) {
+            // If Client Role, but no coach mapping found, fail early
+            if (role === 'client' && !coachId) {
+                setNoProfileFound(true);
+                setDataLoading(false);
+                return;
+            }
+
             // Determine whose data to load
             const targetUid = role === 'client' && coachId ? coachId : user.uid;
             
@@ -112,35 +131,36 @@ const App: React.FC = () => {
 
             // If Client Role, lock the view to themselves
             if (role === 'client') {
-                const myData = initialClients.find(c => c.email.toLowerCase() === user.email?.toLowerCase());
+                const myEmail = user.email?.toLowerCase().trim();
+                const myData = initialClients.find(c => c.email.toLowerCase().trim() === myEmail);
+                
                 if (myData) {
                     setActiveClient(myData);
-                    // We keep all clients in state so 'updateClients' logic works, 
-                    // but we only show the activeClient in the UI.
-                    // Ideally for security we should filter at the API level, 
-                    // but for this mini-app we filter at UI level.
+                    // Force dashboard view for clients
+                    setCurrentPage(NavPage.DASHBOARD);
                 } else {
-                   alert("You are logged in as a client, but your profile was not found. Please contact your coach.");
-                   logout();
+                   // Profile not found in the coach's list
+                   setNoProfileFound(true);
+                   setDataLoading(false);
                    return;
                 }
+            } else {
+                // Admin default view
+                setCurrentPage(NavPage.CLIENTS);
             }
-        } else {
-            // Should not happen with LoginScreen, but safe fallback
-            initialClients = [];
+            
+            setClients(initialClients);
+            setHistory([initialClients]);
+            setHistoryIndex(0);
+        } catch (e) {
+            console.error("Failed to init data", e);
+        } finally {
+            setDataLoading(false);
         }
-        
-        setClients(initialClients);
-        setHistory([initialClients]);
-        setHistoryIndex(0);
-        
-        setDataLoading(false);
     };
 
-    if (!authLoading && user) {
-        initData();
-    }
-  }, [user, authLoading, role, coachId]);
+    initData();
+  }, [user, authLoading, role, coachId]); 
 
   // Data Saving Logic
   useEffect(() => {
@@ -224,7 +244,7 @@ const App: React.FC = () => {
       }
       if (window.confirm("Exit Client View?")) {
           setActiveClient(null);
-          setCurrentPage(NavPage.DASHBOARD);
+          setCurrentPage(NavPage.CLIENTS);
       }
   };
 
@@ -254,6 +274,30 @@ const App: React.FC = () => {
   // If not logged in, show Login Screen
   if (!user) {
       return <LoginScreen />;
+  }
+
+  // Profile Not Found Screen
+  if (noProfileFound) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#F2F2F7] dark:bg-black p-6 text-center animate-fadeIn">
+            <div className="w-24 h-24 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-sm">
+                <Users size={40} />
+            </div>
+            <h1 className="text-2xl font-black text-black dark:text-white mb-2 tracking-tight">Access Denied</h1>
+            <p className="text-gray-500 mb-8 max-w-xs text-sm leading-relaxed">
+                We couldn't find a client profile for <br/>
+                <span className="font-bold text-black dark:text-white">{user.email}</span>
+            </p>
+            <div className="space-y-3 w-full max-w-xs">
+                <button onClick={logout} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-blue-500/20 active:scale-95 transition">
+                    Sign Out
+                </button>
+                <div className="text-[10px] text-gray-400">
+                    Contact your coach to be added to the system.
+                </div>
+            </div>
+        </div>
+      );
   }
 
   return (

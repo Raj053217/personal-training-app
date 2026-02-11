@@ -1,25 +1,36 @@
+
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// TODO: REPLACE THIS WITH YOUR OWN FIREBASE CONFIG FROM THE FIREBASE CONSOLE
-// 1. Go to console.firebase.google.com
-// 2. Create a new project
-// 3. Add a Web App
-// 4. Copy the config object below
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef123456"
+// Helper to get config from local storage
+const getStoredConfig = () => {
+    try {
+        const stored = localStorage.getItem('firebase_config');
+        if (stored) return JSON.parse(stored);
+    } catch (e) {
+        console.error("Failed to parse stored firebase config", e);
+    }
+    return null;
 };
 
-// Check if the user has actually configured the keys
-const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY_HERE";
+// Default configuration provided by user
+const envConfig = {
+  apiKey: "AIzaSyAZZk1tIqA3x1k3F0MehC4sqK7ne4ciE-Y",
+  authDomain: "gen-lang-client-0731055714.firebaseapp.com",
+  projectId: "gen-lang-client-0731055714",
+  storageBucket: "gen-lang-client-0731055714.firebasestorage.app",
+  messagingSenderId: "446871761352",
+  appId: "1:446871761352:web:83aba80e661e762ad150fd",
+  measurementId: "G-VBMR92HGBK"
+};
 
-// Initialize Firebase
+// Determine active config
+const firebaseConfig = getStoredConfig() || envConfig;
+
+// Check if configured (not using placeholder)
+const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY_HERE" && !!firebaseConfig.apiKey;
+
 let app;
 let auth;
 let db;
@@ -37,5 +48,16 @@ if (isFirebaseConfigured) {
 } else {
     console.log("Firebase not configured. App running in Offline/Demo mode.");
 }
+
+// Configuration helpers
+export const configureFirebase = (config: any) => {
+    localStorage.setItem('firebase_config', JSON.stringify(config));
+    window.location.reload();
+};
+
+export const clearFirebaseConfig = () => {
+    localStorage.removeItem('firebase_config');
+    window.location.reload();
+};
 
 export { auth, db, googleProvider, isFirebaseConfigured };

@@ -1,8 +1,9 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Moon, Sun, DollarSign, ChevronRight, Smartphone, Upload, Download, Bell, LogOut, User, RotateCcw, RotateCw, Eye } from 'lucide-react';
+import { Moon, Sun, DollarSign, ChevronRight, Smartphone, Upload, Download, Bell, LogOut, User, RotateCcw, RotateCw, Eye, Database, Trash2 } from 'lucide-react';
 import { Client } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { clearFirebaseConfig, isFirebaseConfigured } from '../services/firebase';
 
 interface SettingsProps {
   clients?: Client[]; // Added clients to populate dropdown
@@ -83,6 +84,12 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
      if (client && onEnterClientMode) {
          onEnterClientMode(client);
      }
+  };
+  
+  const handleResetFirebase = () => {
+      if(window.confirm("Are you sure you want to disconnect your Firebase database? This will reload the app.")) {
+          clearFirebaseConfig();
+      }
   };
   
   const SettingItem = ({ 
@@ -192,6 +199,33 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
          </p>
       </div>
 
+      {/* Database Management */}
+      <div>
+         <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">System</h3>
+         <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
+             {isFirebaseConfigured ? (
+                 <SettingItem 
+                    icon={Database} 
+                    label="Database Configured" 
+                    value={<span className="text-green-500 font-bold text-xs">Connected</span>}
+                    iconColor="bg-green-500"
+                    customContent={
+                        <button onClick={handleResetFirebase} className="text-red-500 font-bold text-xs bg-red-50 px-3 py-1.5 rounded-full flex items-center gap-1">
+                            Disconnect
+                        </button>
+                    }
+                 />
+             ) : (
+                 <SettingItem 
+                    icon={Database} 
+                    label="Database Status" 
+                    value={<span className="text-red-400 text-xs">Offline Mode</span>}
+                    iconColor="bg-gray-400"
+                 />
+             )}
+         </div>
+      </div>
+
       {/* Client View Mode Switcher (New) */}
       <div>
          <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Client View Mode</h3>
@@ -295,7 +329,7 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
           <SettingItem 
             icon={Smartphone} 
             label="Version" 
-            value="2.2.0"
+            value="2.3.0"
             onClick={() => {}}
             iconColor="bg-gray-500"
           />

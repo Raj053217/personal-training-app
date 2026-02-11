@@ -1,10 +1,9 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { Client, NavPage, Session } from '../types';
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts';
-import { DollarSign, ChevronRight, TrendingUp, Clock, Bell, X, BarChart3, Trophy, Target, PlayCircle, CheckCircle2, AlertTriangle, RefreshCcw } from 'lucide-react';
-import { format, addDays, subMonths, isSameDay, differenceInDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, parse, differenceInMinutes, isBefore } from 'date-fns';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie, YAxis } from 'recharts';
+import { DollarSign, ChevronRight, TrendingUp, Clock, Bell, X, BarChart3, Trophy, Target, PlayCircle, CheckCircle2, AlertTriangle, RefreshCcw, PieChart as PieIcon, CalendarDays, Sun, Moon } from 'lucide-react';
+import { format, addDays, subMonths, isSameDay, differenceInDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, parse, differenceInMinutes, isBefore, getDay } from 'date-fns';
 
 interface WidgetProps {
   children?: React.ReactNode;
@@ -176,6 +175,68 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
     return { monthlyHistory: last6Months, projectedRevenue };
   }, [clients, viewingClient]);
 
+  // --- NEW ANALYTICS ---
+
+  // 1. Session Status Distribution (Pie)
+  const sessionStatusData = useMemo(() => {
+    let completed = 0, cancelled = 0, missed = 0, scheduled = 0;
+    targetClients.forEach(c => {
+        c.sessions.forEach(s => {
+            if (s.status === 'completed' || s.completed) completed++;
+            else if (s.status === 'cancelled') cancelled++;
+            else if (s.status === 'missed') missed++;
+            else scheduled++;
+        });
+    });
+    const total = completed + cancelled + missed + scheduled;
+    // Don't show scheduled in the reliability pie, focus on outcomes
+    const outcomeTotal = completed + cancelled + missed;
+    return [
+        { name: 'Done', value: completed, color: '#34C759' }, // Green
+        { name: 'Missed', value: missed, color: '#FF9500' }, // Orange
+        { name: 'Cancelled', value: cancelled, color: '#FF3B30' }, // Red
+    ].filter(d => d.value > 0);
+  }, [targetClients]);
+
+  // 2. Weekly Activity (Bar)
+  const weeklyActivityData = useMemo(() => {
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const data = days.map(d => ({ name: d, count: 0 }));
+      targetClients.forEach(c => {
+          c.sessions.forEach(s => {
+             if (s.status !== 'cancelled') {
+                 const d = new Date(s.date);
+                 if (!isNaN(d.getTime())) {
+                     data[getDay(d)].count++;
+                 }
+             }
+          });
+      });
+      return data;
+  }, [targetClients]);
+
+  // 3. Time of Day Split
+  const timeSplit = useMemo(() => {
+      let morning = 0;
+      let evening = 0;
+      targetClients.forEach(c => {
+          c.sessions.forEach(s => {
+              if (s.status !== 'cancelled') {
+                  const hour = parseInt(s.time.split(':')[0]);
+                  if (hour < 12) morning++;
+                  else evening++;
+              }
+          });
+      });
+      const total = morning + evening;
+      return { 
+          morning, 
+          evening, 
+          morningPct: total ? Math.round((morning / total) * 100) : 0,
+          eveningPct: total ? Math.round((evening / total) * 100) : 0 
+      };
+  }, [targetClients]);
+
   return (
     <div className="space-y-5 animate-fadeIn pb-6 relative">
       <div className="pt-2 px-1 flex justify-between items-end relative z-20">
@@ -217,12 +278,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
               </Widget>
 
               <div className="grid grid-cols-2 gap-4">
-                  <Widget className="col-span-1" title="Completed" icon={CheckCircle2} iconColor="bg-green-500 text-green-500">
-                      <div className="mt-2">
-                          <span className="text-3xl font-black text-black dark:text-white">
-                              {viewingClient.sessions.filter(s => s.completed || s.status === 'completed').length}
-                          </span>
-                          <span className="text-gray-400 text-xs font-bold ml-1">/ {viewingClient.sessions.length}</span>
+                  <Widget className="col-span-1" title="Attendance" icon={CheckCircle2} iconColor="bg-green-500 text-green-500">
+                      <div className="h-[100px] relative">
+                          <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                  <Pie data={sessionStatusData} cx="50%" cy="50%" innerRadius={25} outerRadius={40} paddingAngle={5} dataKey="value">
+                                      {sessionStatusData.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                                      ))}
+                                  </Pie>
+                                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                              </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <span className="text-xs font-black text-gray-400">{sessionStatusData[0]?.value || 0}</span>
+                          </div>
                       </div>
                   </Widget>
                   <Widget className="col-span-1" title="Status" icon={AlertTriangle} iconColor="bg-orange-500 text-orange-500">
@@ -251,6 +321,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
       ) : (
       /* --- ADMIN MODE VIEW --- */
       <>
+          {/* 1. Today's Agenda */}
           <Widget 
             className="col-span-2" 
             title="Today's Mission" 
@@ -284,6 +355,78 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
           </Widget>
 
           <div className="grid grid-cols-2 gap-4">
+            
+            {/* 2. Monthly Revenue Goal */}
+            <Widget className="col-span-1" title="Monthly Goal" icon={Target} iconColor="bg-red-500 text-red-500">
+                <div className="mt-2">
+                    <div className="flex justify-between items-baseline mb-1">
+                        <span className="text-xl font-bold text-black dark:text-white">{currency}{(performanceStats.month.revenue / 1000).toFixed(1)}k</span>
+                        <span className="text-[10px] font-bold text-gray-400">50k</span>
+                    </div>
+                    <div className="h-2 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-red-500 rounded-full" style={{ width: `${Math.min(100, (performanceStats.month.revenue / 50000) * 100)}%` }}></div>
+                    </div>
+                </div>
+            </Widget>
+
+            {/* 3. Capacity Usage */}
+            <Widget className="col-span-1" title="Capacity" icon={Clock} iconColor="bg-yellow-500 text-yellow-500">
+                <div className="mt-2">
+                    <div className="flex justify-between items-baseline mb-1">
+                        <span className="text-xl font-bold text-black dark:text-white">{capacityStats.percentage}%</span>
+                        <span className="text-[10px] font-bold text-gray-400">Full</span>
+                    </div>
+                    <div className="h-2 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${capacityStats.percentage}%` }}></div>
+                    </div>
+                </div>
+            </Widget>
+
+            {/* 4. Session Reliability (Pie Chart) */}
+            <Widget className="col-span-1 min-h-[160px]" title="Reliability" icon={PieIcon} iconColor="bg-purple-500 text-purple-500">
+                <div className="h-[100px] w-full mt-1 relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie data={sessionStatusData} cx="50%" cy="50%" innerRadius={28} outerRadius={42} paddingAngle={4} dataKey="value" stroke="none">
+                                {sessionStatusData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                            </Pie>
+                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '12px' }} itemStyle={{color: 'black'}} />
+                        </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase">Done</span>
+                        <span className="text-lg font-black text-black dark:text-white">{sessionStatusData.find(d => d.name === 'Done')?.value || 0}</span>
+                    </div>
+                </div>
+            </Widget>
+
+            {/* 5. Time Split */}
+            <Widget className="col-span-1 min-h-[160px]" title="Time Split" icon={Sun} iconColor="bg-orange-400 text-orange-400">
+                 <div className="mt-3 space-y-4">
+                     <div>
+                         <div className="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
+                             <div className="flex items-center gap-1"><Sun size={10}/> Morning</div>
+                             <span>{timeSplit.morningPct}%</span>
+                         </div>
+                         <div className="h-1.5 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-orange-400 rounded-full" style={{ width: `${timeSplit.morningPct}%` }}></div>
+                         </div>
+                     </div>
+                     <div>
+                         <div className="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
+                             <div className="flex items-center gap-1"><Moon size={10}/> Evening</div>
+                             <span>{timeSplit.eveningPct}%</span>
+                         </div>
+                         <div className="h-1.5 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${timeSplit.eveningPct}%` }}></div>
+                         </div>
+                     </div>
+                 </div>
+            </Widget>
+
+            {/* 6. Renewals Alert */}
             <Widget className="col-span-2" title="Renewals Needed" icon={RefreshCcw} iconColor="bg-red-500 text-red-500">
             <div className="mt-1 space-y-2">
                 {expiringClients.length > 0 ? expiringClients.slice(0, 3).map(c => {
@@ -303,31 +446,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
                 }) : <p className="text-xs text-gray-400 italic py-2">All client packages are healthy.</p>}
             </div>
             </Widget>
+          </div>
 
-            <Widget className="col-span-1" title="Monthly Goal" icon={Target} iconColor="bg-red-500 text-red-500">
-            <div className="mt-2">
-                <div className="flex justify-between items-baseline mb-1">
-                    <span className="text-xl font-bold text-black dark:text-white">{currency}{(performanceStats.month.revenue / 1000).toFixed(1)}k</span>
-                    <span className="text-[10px] font-bold text-gray-400">50k</span>
-                </div>
-                <div className="h-2 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-500 rounded-full" style={{ width: `${Math.min(100, (performanceStats.month.revenue / 50000) * 100)}%` }}></div>
-                </div>
+          {/* 7. Peak Activity Days (Bar Chart) */}
+          <Widget className="col-span-2 min-h-[220px]" title="Peak Activity Days" icon={CalendarDays} iconColor="bg-blue-500 text-blue-500">
+            <div className="mt-2 h-[160px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyActivityData}>
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9CA3AF', fontWeight: 600 }} dy={10} />
+                    <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '12px' }} />
+                    <Bar dataKey="count" radius={[4, 4, 4, 4]} barSize={32}>
+                        {weeklyActivityData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.count > 0 ? '#007AFF' : '#F2F2F7'} className="dark:fill-gray-800" />
+                        ))}
+                    </Bar>
+                </BarChart>
+                </ResponsiveContainer>
             </div>
+          </Widget>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* 8. Earnings History */}
+            <Widget className="col-span-2 min-h-[220px]" title="Earnings Growth" icon={BarChart3} iconColor="bg-green-500 text-green-500">
+                <div className="mt-2 h-[160px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={extendedAnalytics.monthlyHistory}>
+                        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 500 }} dy={10} />
+                        <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '12px' }} />
+                        <Bar dataKey="revenue" radius={[6, 6, 6, 6]} barSize={28}>
+                            {extendedAnalytics.monthlyHistory.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={index === 5 ? '#34C759' : '#E5E7EB'} className="dark:fill-gray-700" />
+                            ))}
+                        </Bar>
+                    </BarChart>
+                    </ResponsiveContainer>
+                </div>
             </Widget>
 
-            <Widget className="col-span-1" title="Capacity" icon={Clock} iconColor="bg-yellow-500 text-yellow-500">
-            <div className="mt-2">
-                <div className="flex justify-between items-baseline mb-1">
-                    <span className="text-xl font-bold text-black dark:text-white">{capacityStats.percentage}%</span>
-                    <span className="text-[10px] font-bold text-gray-400">Full</span>
-                </div>
-                <div className="h-2 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${capacityStats.percentage}%` }}></div>
-                </div>
-            </div>
-            </Widget>
-
+            {/* 9. Client Leaderboard */}
             <Widget className="col-span-2" title="Client Leaderboard" icon={Trophy} iconColor="bg-yellow-500 text-yellow-500">
             <div className="mt-2 space-y-3">
                 {topClients.map((c, i) => (
@@ -347,21 +503,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
             </div>
             </Widget>
 
-            <Widget className="col-span-2 min-h-[220px]" title="Earnings Growth" icon={BarChart3} iconColor="bg-green-500 text-green-500">
-            <div className="mt-2 h-[160px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={extendedAnalytics.monthlyHistory}>
-                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 500 }} dy={10} />
-                    <Bar dataKey="revenue" radius={[6, 6, 6, 6]} barSize={28}>
-                        {extendedAnalytics.monthlyHistory.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={index === 5 ? '#34C759' : '#E5E7EB'} className="dark:fill-gray-700" />
-                        ))}
-                    </Bar>
-                </BarChart>
-                </ResponsiveContainer>
-            </div>
-            </Widget>
-
+            {/* 10. Lifetime Revenue Summary */}
             <Widget className="col-span-2" title="Lifetime Revenue" icon={DollarSign} iconColor="bg-green-500 text-green-500">
             <div className="flex justify-between items-end">
                 <div>
@@ -378,6 +520,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
             </div>
             </Widget>
         </div>
+      </>
       )}
     </div>
   );
