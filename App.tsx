@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ErrorInfo } from 'react';
 import { Client, NavPage } from './types';
 import { saveClients, loadClients } from './services/storage';
-import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, AlertTriangle } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import ClientList from './components/ClientList';
 import ClientForm from './components/ClientForm';
@@ -11,8 +11,46 @@ import Settings from './components/Settings';
 import PlanManager from './components/PlanManager';
 import { useAuth } from './contexts/AuthContext';
 
-const App: React.FC = () => {
-  const { user } = useAuth(); // Auth is now mocked
+// --- Error Boundary ---
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-black p-6">
+           <div className="bg-white dark:bg-[#1C1C1E] p-8 rounded-3xl shadow-xl max-w-md text-center">
+              <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
+              <h1 className="text-xl font-black text-black dark:text-white mb-2">Something went wrong</h1>
+              <p className="text-sm text-gray-500 mb-6">The application encountered an unexpected error.</p>
+              <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl text-left mb-6 overflow-auto max-h-40">
+                  <code className="text-[10px] text-red-500 font-mono">{this.state.error?.message}</code>
+              </div>
+              <button onClick={() => window.location.reload()} className="bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition">
+                  Reload App
+              </button>
+           </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const AppContent: React.FC = () => {
+  const { user } = useAuth(); 
   const [clients, setClients] = useState<Client[]>([]);
   const [currentPage, setCurrentPage] = useState<NavPage>(NavPage.CLIENTS);
   const [editingClient, setEditingClient] = useState<Client | undefined>(undefined);
@@ -33,7 +71,7 @@ const App: React.FC = () => {
 
     // Load Data
     const localData = loadClients();
-    setClients(localData);
+    setClients(localData || []);
   }, []);
 
   useEffect(() => {
@@ -175,6 +213,14 @@ const App: React.FC = () => {
       )}
     </div>
   );
+};
+
+const App: React.FC = () => {
+    return (
+        <ErrorBoundary>
+            <AppContent />
+        </ErrorBoundary>
+    );
 };
 
 export default App;
