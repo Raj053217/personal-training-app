@@ -34,8 +34,14 @@ const getAnonymousStats = (clients: Client[]) => {
  */
 export const generateBusinessInsight = async (clients: Client[], scheduleContext?: ScheduleContext): Promise<string> => {
   try {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+        console.warn("Gemini API Key is missing.");
+        return "AI insights require an API Key. Please configure it in your Vercel settings.";
+    }
+
     // Initialization using aistudio guidelines: named parameter and environment variable
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const stats = getAnonymousStats(clients);
     
     let prompt = `
@@ -85,7 +91,7 @@ export const generateBusinessInsight = async (clients: Client[], scheduleContext
     return response.text || "Could not generate insights at this time.";
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "Error connecting to AI service. Please check your connection.";
+    return "Error connecting to AI service. Please check your connection and API Key.";
   }
 };
 
@@ -95,7 +101,10 @@ export const generateBusinessInsight = async (clients: Client[], scheduleContext
  */
 export const generateClientNoteSummary = async (notes: string): Promise<string> => {
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) return "API Key missing.";
+
+        const ai = new GoogleGenAI({ apiKey });
         
         const prompt = `Summarize these personal training client notes into 3 key bullet points for quick review before a session:\n\n${notes}`;
         
