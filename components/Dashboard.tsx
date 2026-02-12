@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { Client, NavPage, Session } from '../types';
+import { Client, NavPage, Session, DietMeal } from '../types';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie, YAxis } from 'recharts';
-import { DollarSign, ChevronRight, TrendingUp, Clock, Bell, X, BarChart3, Trophy, Target, PlayCircle, CheckCircle2, AlertTriangle, RefreshCcw, PieChart as PieIcon, CalendarDays, Sun, Moon } from 'lucide-react';
+import { DollarSign, ChevronRight, TrendingUp, Clock, Bell, X, BarChart3, Trophy, Target, PlayCircle, CheckCircle2, AlertTriangle, RefreshCcw, PieChart as PieIcon, CalendarDays, Sun, Moon, Link, Utensils } from 'lucide-react';
 import { format, addDays, subMonths, isSameDay, differenceInDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, parse, differenceInMinutes, isBefore, getDay } from 'date-fns';
 
 interface WidgetProps {
@@ -118,6 +118,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
       const completed = relevantSessions.filter(s => s.session.status === 'completed').length;
       return { total, completed };
   }, [relevantSessions]);
+
+  // --- Client Diet Summary (Client Mode) ---
+  const dietSummary = useMemo(() => {
+      if (!viewingClient || !viewingClient.dietPlan || !Array.isArray(viewingClient.dietPlan)) return null;
+      const meals = viewingClient.dietPlan as DietMeal[];
+      const totalCals = meals.reduce((acc, m) => acc + m.items.reduce((b, i) => b + (parseInt(i.calories || '0') || 0), 0), 0);
+      const totalProt = meals.reduce((acc, m) => acc + m.items.reduce((b, i) => b + (parseInt(i.protein || '0') || 0), 0), 0);
+      return { totalCals, totalProt };
+  }, [viewingClient]);
 
   // --- Revenue / Performance Stats (Admin Only) ---
   const performanceStats = useMemo(() => {
@@ -253,6 +262,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
             </button>
          )}
       </div>
+      
+      {/* Zero State for New Admins or Unlinked Clients */}
+      {!viewingClient && clients.length === 0 && (
+          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[24px] p-6 text-white shadow-xl animate-slideUp">
+              <h2 className="text-xl font-bold mb-2">Welcome to FitWithRj! 🚀</h2>
+              <p className="text-blue-100 text-sm mb-6 leading-relaxed">
+                  Start your journey by adding your first client or connecting to your trainer.
+              </p>
+              <div className="flex flex-col gap-3">
+                  <button onClick={() => navigateTo(NavPage.ADD_CLIENT)} className="bg-white text-blue-600 font-bold py-3 rounded-xl shadow-lg active:scale-95 transition">
+                      + Add New Client (For Coaches)
+                  </button>
+                  <button onClick={() => navigateTo(NavPage.SETTINGS)} className="bg-blue-700/50 text-white font-bold py-3 rounded-xl border border-white/20 active:scale-95 transition flex items-center justify-center gap-2">
+                      <Link size={16} /> I'm a Client (Connect to Coach)
+                  </button>
+                  <p className="text-[10px] text-blue-200 text-center px-4">
+                      If you are a client and see this screen, click "Connect to Coach" and ask your trainer for their Trainer ID.
+                  </p>
+              </div>
+          </div>
+      )}
 
       {/* --- CLIENT MODE VIEW --- */}
       {viewingClient ? (
@@ -276,6 +306,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
                       <div className="py-6 text-center text-gray-400 text-sm italic">No upcoming sessions scheduled.</div>
                   )}
               </Widget>
+
+              {/* Diet Summary Widget */}
+              {dietSummary && dietSummary.totalCals > 0 && (
+                  <Widget className="col-span-2" title="Daily Targets" icon={Utensils} iconColor="bg-green-500 text-green-500">
+                      <div className="mt-2 flex justify-between items-end">
+                           <div className="text-center">
+                               <p className="text-2xl font-black text-black dark:text-white">{dietSummary.totalCals}</p>
+                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Calories</p>
+                           </div>
+                           <div className="text-center">
+                               <p className="text-2xl font-black text-black dark:text-white">{dietSummary.totalProt}g</p>
+                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Protein</p>
+                           </div>
+                           <button onClick={() => navigateTo(NavPage.PLANS)} className="p-3 bg-gray-100 dark:bg-white/10 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-300 active:scale-95 transition">
+                               View Plan
+                           </button>
+                      </div>
+                  </Widget>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                   <Widget className="col-span-1" title="Attendance" icon={CheckCircle2} iconColor="bg-green-500 text-green-500">
@@ -307,12 +356,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
 
               <Widget className="col-span-2" title="My Plan" icon={Target} iconColor="bg-purple-500 text-purple-500">
                   <div className="mt-2 space-y-3">
-                      <button onClick={() => navigateTo(NavPage.PLANS)} className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-2xl">
-                          <span className="font-bold text-gray-700 dark:text-gray-200">View Nutrition Plan</span>
-                          <ChevronRight size={16} className="text-gray-400"/>
-                      </button>
-                      <button onClick={() => navigateTo(NavPage.PLANS)} className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-2xl">
-                          <span className="font-bold text-gray-700 dark:text-gray-200">View Training Program</span>
+                      <button onClick={() => navigateTo(NavPage.PLANS)} className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-2xl active:scale-95 transition">
+                          <span className="font-bold text-gray-700 dark:text-gray-200">View Full Program</span>
                           <ChevronRight size={16} className="text-gray-400"/>
                       </button>
                   </div>
@@ -320,6 +365,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
           </div>
       ) : (
       /* --- ADMIN MODE VIEW --- */
+      clients.length > 0 && (
       <>
           {/* 1. Today's Agenda */}
           <Widget 
@@ -521,6 +567,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
             </Widget>
         </div>
       </>
+      )
       )}
     </div>
   );

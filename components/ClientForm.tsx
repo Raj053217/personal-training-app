@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Client, Session, PaymentFrequency, WeightEntry } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -107,13 +108,17 @@ const ClientForm: React.FC<ClientFormProps> = ({ onSave, onCancel, initialData, 
     const timeSlot = `${startTime}-${endTime}`;
     const newClient: Client = {
       id: initialData?.id || uuidv4(),
-      name, email, phone, startDate, expiryDate, defaultTimeSlot: timeSlot,
+      name, 
+      email: email.trim(), 
+      phone, 
+      accessCode: '00000', // Dummy code for type compatibility
+      startDate, expiryDate, defaultTimeSlot: timeSlot,
       totalFee: parseFloat(totalFee), paidAmount: parseFloat(paidAmount),
       paymentPlan: recurringEnabled ? { enabled: true, frequency: recurringFreq, amount: parseFloat(recurringAmount), count: parseInt(recurringCount) } : undefined,
       sessions: selectedSessions.map(s => ({ ...s, time: timeSlot })).sort((a,b) => a.date.localeCompare(b.date)),
       notes, 
-      dietPlan: initialData?.dietPlan, // Preserve existing plans
-      workoutRoutine: initialData?.workoutRoutine, // Preserve existing plans
+      dietPlan: initialData?.dietPlan, 
+      workoutRoutine: initialData?.workoutRoutine, 
       weightHistory, 
       createdAt: initialData?.createdAt || new Date().toISOString()
     };
@@ -154,11 +159,11 @@ const ClientForm: React.FC<ClientFormProps> = ({ onSave, onCancel, initialData, 
                 <InputGroup label="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full text-right bg-transparent outline-none text-blue-500" placeholder="Optional"/></InputGroup>
                 <InputGroup label="Phone"><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full text-right bg-transparent outline-none text-blue-500" placeholder="Optional"/></InputGroup>
             </div>
+            
             <div className="bg-white dark:bg-[#1C1C1E] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-white/5">
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Health Notes</h3>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full bg-transparent outline-none text-[15px] text-gray-900 dark:text-white h-32 resize-none leading-relaxed" placeholder="Injuries, goals, etc..."/>
             </div>
-            <p className="text-center text-xs text-gray-400">Diet and Workout plans are now managed in the "Plans" tab.</p>
           </div>
         )}
 

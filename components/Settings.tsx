@@ -1,12 +1,11 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Moon, Sun, DollarSign, ChevronRight, Smartphone, Upload, Download, Bell, LogOut, User, RotateCcw, RotateCw, Eye, Database, Trash2 } from 'lucide-react';
+import { Moon, Sun, DollarSign, ChevronRight, Smartphone, HardDrive, Bell } from 'lucide-react';
 import { Client } from '../types';
-import { useAuth } from '../contexts/AuthContext';
-import { clearFirebaseConfig, isFirebaseConfigured } from '../services/firebase';
+import { loadTemplates, loadFoodLibrary, saveTemplates, saveFoodLibrary } from '../services/storage';
 
 interface SettingsProps {
-  clients?: Client[]; // Added clients to populate dropdown
+  clients?: Client[];
   isDarkMode: boolean;
   toggleTheme: () => void;
   currency: string;
@@ -16,15 +15,13 @@ interface SettingsProps {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  onEnterClientMode?: (client: Client) => void; // Callback
+  onEnterClientMode?: (client: Client) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleTheme, currency, setCurrency, onRestore, undo, redo, canUndo, canRedo, onEnterClientMode }) => {
+const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleTheme, currency, setCurrency, onRestore }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [selectedClientForView, setSelectedClientForView] = useState('');
-  const { user, login, logout } = useAuth();
-
+  
   useEffect(() => {
     const stored = localStorage.getItem('notifications_enabled');
     setNotificationsEnabled(stored === 'true');
@@ -46,9 +43,22 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
     }
   };
 
-  const handleBackup = () => {
-    const dataStr = localStorage.getItem('pt_manage_pro_data');
-    if (!dataStr || dataStr === '[]') return alert('No data to backup.');
+  const handleEnhancedBackup = () => {
+    const templatesData = loadTemplates();
+    const foodData = loadFoodLibrary();
+
+    const backupPayload = {
+      meta: {
+        app: 'FitwithRj',
+        version: '3.0',
+        date: new Date().toISOString(),
+      },
+      clients: clients,
+      templates: templatesData,
+      foodLibrary: foodData
+    };
+
+    const dataStr = JSON.stringify(backupPayload, null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -61,37 +71,36 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
 
   const handleRestoreClick = () => fileInputRef.current?.click();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEnhancedRestore = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        if (Array.isArray(json) && json.every(item => item.id && item.name)) {
-             if (window.confirm('Restore backup? This overwrites current data.')) onRestore(json);
-        } else {
-          alert('Invalid backup file.');
+        
+        if (window.confirm('Restoring will overwrite current Clients, Plans, and Food Library. Continue?')) {
+            if (Array.isArray(json)) {
+                onRestore(json);
+                alert("Clients restored successfully.");
+            } else if (json.meta && (json.meta.app === 'FitwithRj' || json.clients)) {
+                if (json.clients) onRestore(json.clients);
+                if (json.templates) saveTemplates(json.templates);
+                if (json.foodLibrary) saveFoodLibrary(json.foodLibrary);
+                alert("Full system restored successfully!");
+            } else {
+                alert("Invalid backup file format.");
+            }
         }
-      } catch (err) { alert('Failed to parse file.'); }
+      } catch (err) { 
+          alert('Failed to parse backup file.'); 
+          console.error(err);
+      }
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsText(file);
   };
 
-  const handleEnterClientMode = () => {
-     const client = clients.find(c => c.id === selectedClientForView);
-     if (client && onEnterClientMode) {
-         onEnterClientMode(client);
-     }
-  };
-  
-  const handleResetFirebase = () => {
-      if(window.confirm("Are you sure you want to disconnect your Firebase database? This will reload the app.")) {
-          clearFirebaseConfig();
-      }
-  };
-  
   const SettingItem = ({ 
     icon: Icon, 
     label, 
@@ -100,8 +109,6 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
     isToggle = false,
     toggleValue = false,
     iconColor = "bg-ios-blue",
-    customContent,
-    disabled = false
   }: { 
     icon: any, 
     label: string, 
@@ -110,12 +117,10 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
     isToggle?: boolean,
     toggleValue?: boolean,
     iconColor?: string,
-    customContent?: React.ReactNode,
-    disabled?: boolean
   }) => (
     <div 
-      onClick={!isToggle && !disabled ? onClick : undefined}
-      className={`flex items-center justify-between p-3.5 pl-4 bg-ios-card-light dark:bg-ios-card-dark transition-colors ${!disabled ? 'active:bg-[#E5E5EA] dark:active:bg-[#2C2C2E] cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+      onClick={!isToggle ? onClick : undefined}
+      className={`flex items-center justify-between p-3.5 pl-4 bg-ios-card-light dark:bg-ios-card-dark transition-colors active:bg-[#E5E5EA] dark:active:bg-[#2C2C2E] cursor-pointer`}
     >
       <div className="flex items-center gap-3">
         <div className={`w-7 h-7 rounded-[7px] ${iconColor} flex items-center justify-center text-white`}>
@@ -125,7 +130,7 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
       </div>
       
       <div className="flex items-center gap-2 pr-1">
-        {customContent ? customContent : isToggle ? (
+        {isToggle ? (
           <button 
              onClick={onClick}
              className={`w-[51px] h-[31px] rounded-full transition-colors relative ${toggleValue ? 'bg-ios-green' : 'bg-[#E9E9EA] dark:bg-[#39393D]'}`}
@@ -144,138 +149,16 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
 
   return (
     <div className="space-y-8 animate-fadeIn pb-10">
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
+      <input type="file" ref={fileInputRef} onChange={handleEnhancedRestore} accept=".json" className="hidden" />
       
        {/* Large Title Header */}
        <div className="pt-2 px-1">
          <h1 className="text-[34px] font-bold text-black dark:text-white leading-tight">Settings</h1>
       </div>
 
-      {/* Account Section */}
+      {/* Preferences Group */}
       <div>
-         <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Account</h3>
-         <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
-            {user ? (
-               <SettingItem 
-                 icon={User} 
-                 label="Logged in as"
-                 value={
-                    <div className="flex items-center gap-2">
-                       <span className="text-sm truncate max-w-[120px]">{user.displayName || user.email}</span>
-                       <button onClick={logout} className="text-ios-red font-medium text-sm bg-red-100 dark:bg-red-900/30 px-3 py-1 rounded-full">Sign Out</button>
-                    </div>
-                 }
-                 iconColor="bg-ios-blue"
-                 customContent={
-                     <div className="flex items-center gap-2">
-                       {user.photoURL && <img src={user.photoURL} alt="User" className="w-6 h-6 rounded-full" />}
-                       <span className="text-[15px] text-ios-gray hidden sm:inline">{user.email}</span>
-                       <button onClick={logout} className="text-ios-red font-medium text-[15px] ml-2">Sign Out</button>
-                    </div>
-                 }
-               />
-            ) : (
-               <div 
-                 onClick={login}
-                 className="flex items-center justify-between p-3.5 pl-4 bg-ios-card-light dark:bg-ios-card-dark active:bg-[#E5E5EA] dark:active:bg-[#2C2C2E] cursor-pointer transition-colors"
-               >
-                 <div className="flex items-center gap-3">
-                   <div className={`w-7 h-7 rounded-[7px] bg-white border flex items-center justify-center text-white overflow-hidden`}>
-                     <svg viewBox="0 0 24 24" className="w-5 h-5">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                     </svg>
-                   </div>
-                   <span className="text-[17px] text-ios-blue font-medium">Sign in with Google</span>
-                 </div>
-                 <ChevronRight size={16} className="text-ios-gray3" />
-               </div>
-            )}
-         </div>
-         <p className="px-4 mt-2 text-[13px] text-ios-gray">
-            {user ? "Your data is backed up to the cloud." : "Sign in to sync your data across devices."}
-         </p>
-      </div>
-
-      {/* Database Management */}
-      <div>
-         <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">System</h3>
-         <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
-             {isFirebaseConfigured ? (
-                 <SettingItem 
-                    icon={Database} 
-                    label="Database Configured" 
-                    value={<span className="text-green-500 font-bold text-xs">Connected</span>}
-                    iconColor="bg-green-500"
-                    customContent={
-                        <button onClick={handleResetFirebase} className="text-red-500 font-bold text-xs bg-red-50 px-3 py-1.5 rounded-full flex items-center gap-1">
-                            Disconnect
-                        </button>
-                    }
-                 />
-             ) : (
-                 <SettingItem 
-                    icon={Database} 
-                    label="Database Status" 
-                    value={<span className="text-red-400 text-xs">Offline Mode</span>}
-                    iconColor="bg-gray-400"
-                 />
-             )}
-         </div>
-      </div>
-
-      {/* Client View Mode Switcher (New) */}
-      <div>
-         <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Client View Mode</h3>
-         <div className="bg-ios-card-light dark:bg-ios-card-dark rounded-[10px] overflow-hidden shadow-sm p-3.5">
-             <div className="flex gap-2">
-                 <select 
-                   value={selectedClientForView} 
-                   onChange={(e) => setSelectedClientForView(e.target.value)}
-                   className="flex-1 bg-gray-100 dark:bg-black/20 text-black dark:text-white rounded-lg px-3 py-2 text-sm outline-none border border-transparent focus:border-blue-500"
-                 >
-                     <option value="">Select Client...</option>
-                     {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                 </select>
-                 <button 
-                    onClick={handleEnterClientMode}
-                    disabled={!selectedClientForView}
-                    className="bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm"
-                 >
-                    Switch
-                 </button>
-             </div>
-             <p className="mt-2 text-[11px] text-gray-400">Restricts the app to a read-only view for the selected client. Useful for sharing screen or kiosk mode.</p>
-         </div>
-      </div>
-      
-      {/* Edit History */}
-      <div>
-         <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Edit History</h3>
-         <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
-            <SettingItem 
-              icon={RotateCcw} 
-              label="Undo Last Change" 
-              onClick={undo}
-              disabled={!canUndo}
-              iconColor={canUndo ? "bg-ios-orange" : "bg-gray-400"}
-              value={canUndo ? "" : "Nothing to undo"}
-            />
-            <SettingItem 
-              icon={RotateCw} 
-              label="Redo Change" 
-              onClick={redo}
-              disabled={!canRedo}
-              iconColor={canRedo ? "bg-ios-orange" : "bg-gray-400"}
-              value={canRedo ? "" : "Nothing to redo"}
-            />
-         </div>
-      </div>
-
-      {/* Group 1 */}
-      <div>
+        <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Preferences</h3>
         <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
           <SettingItem 
             icon={isDarkMode ? Moon : Sun} 
@@ -301,35 +184,37 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
             iconColor="bg-ios-green"
           />
         </div>
-        <p className="px-4 mt-2 text-[13px] text-ios-gray">Notifications send reminders 15 minutes before sessions.</p>
       </div>
 
-      {/* Group 2 */}
+      {/* Data Management Group */}
       <div>
-        <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
-          <SettingItem 
-            icon={Download} 
-            label="Backup Data" 
-            onClick={handleBackup}
-            iconColor="bg-ios-blue"
-          />
-           <SettingItem 
-            icon={Upload} 
-            label="Restore Data" 
-            onClick={handleRestoreClick}
-            iconColor="bg-ios-blue"
-          />
+        <h3 className="text-[13px] font-semibold text-ios-gray uppercase tracking-wide mb-2 px-4">Data Management</h3>
+        <div className="bg-ios-card-light dark:bg-ios-card-dark rounded-[10px] overflow-hidden shadow-sm p-4 space-y-4">
+            <div className="flex gap-4">
+                <button onClick={handleEnhancedBackup} className="flex-1 bg-gray-50 dark:bg-white/5 p-4 rounded-2xl flex flex-col items-center gap-2 hover:bg-gray-100 dark:hover:bg-white/10 transition border border-gray-100 dark:border-white/5">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center">
+                        <HardDrive size={20} />
+                    </div>
+                    <span className="text-sm font-bold text-black dark:text-white">Backup</span>
+                </button>
+
+                <button onClick={handleRestoreClick} className="flex-1 bg-gray-50 dark:bg-white/5 p-4 rounded-2xl flex flex-col items-center gap-2 hover:bg-gray-100 dark:hover:bg-white/10 transition border border-gray-100 dark:border-white/5">
+                    <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 flex items-center justify-center">
+                        <HardDrive size={20} />
+                    </div>
+                    <span className="text-sm font-bold text-black dark:text-white">Restore</span>
+                </button>
+            </div>
         </div>
-        <p className="px-4 mt-2 text-[13px] text-ios-gray">Export your data to JSON for safekeeping.</p>
       </div>
 
-      {/* Group 3 */}
+      {/* App Info */}
       <div>
         <div className="rounded-[10px] overflow-hidden shadow-sm divide-y divide-ios-separator-light dark:divide-ios-separator-dark">
           <SettingItem 
             icon={Smartphone} 
             label="Version" 
-            value="2.3.0"
+            value="3.0.0 (Personal)"
             onClick={() => {}}
             iconColor="bg-gray-500"
           />

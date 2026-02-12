@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Client, PlanTemplate, DietMeal, WorkoutDay, FoodItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Search, Plus, Trash2, FileText, Download, ChevronRight, Save, ArrowLeft, Copy, Printer, Eye, X, Utensils, Book, Filter } from 'lucide-react';
+import { Search, Plus, Trash2, FileText, Download, ChevronRight, Save, ArrowLeft, Copy, Printer, Eye, X, Utensils, Book, Filter, Dumbbell } from 'lucide-react';
 import PlanBuilder from './PlanBuilder';
 import PlanPDF from './PlanPDF';
 import { saveTemplates, loadTemplates, saveFoodLibrary, loadFoodLibrary } from '../services/storage';
@@ -15,9 +15,167 @@ interface PlanManagerProps {
 
 const FOOD_CATEGORIES = ['Proteins', 'Carbs', 'Fats', 'Fruits', 'Vegetables', 'Dairy', 'Snacks', 'Beverages', 'Other'];
 
+// --- Dedicated Client View Component ---
+const ClientPlanView = ({ client }: { client: Client }) => {
+  const [tab, setTab] = useState<'diet' | 'workout'>('diet');
+  const diet = (client.dietPlan as DietMeal[]) || [];
+  const workout = (client.workoutRoutine as WorkoutDay[]) || [];
+  const [showPdf, setShowPdf] = useState(false);
+
+  // Calculate Macros
+  const macros = diet.reduce((acc, meal) => {
+     meal.items.forEach(item => {
+         acc.cals += parseInt(item.calories || '0') || 0;
+         acc.prot += parseInt(item.protein || '0') || 0;
+         acc.carbs += parseInt(item.carbs || '0') || 0;
+         acc.fats += parseInt(item.fats || '0') || 0;
+     });
+     return acc;
+  }, { cals: 0, prot: 0, carbs: 0, fats: 0 });
+
+  return (
+     <div className="space-y-6 pb-24">
+        {/* Toggle & PDF Action */}
+        <div className="flex items-center gap-3">
+            <div className="bg-gray-200 dark:bg-gray-800 p-1 rounded-2xl flex flex-1">
+                <button onClick={() => setTab('diet')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${tab === 'diet' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>
+                    <Utensils size={16}/> Nutrition
+                </button>
+                <button onClick={() => setTab('workout')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${tab === 'workout' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>
+                    <Dumbbell size={16}/> Training
+                </button>
+            </div>
+            <button onClick={() => setShowPdf(true)} className="w-12 h-12 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-2xl border border-blue-100 dark:border-blue-900/30 active:scale-95 transition">
+                <Printer size={20} />
+            </button>
+        </div>
+
+        {tab === 'diet' ? (
+            <div className="space-y-4 animate-slideUp">
+                 {/* Macro Summary Card */}
+                 {diet.length > 0 && (
+                     <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-[24px] p-5 text-white shadow-lg">
+                         <h3 className="font-bold opacity-90 uppercase tracking-wider text-xs mb-4 flex items-center gap-2"><Utensils size={14}/> Daily Targets</h3>
+                         <div className="grid grid-cols-4 gap-2 text-center">
+                             <div>
+                                 <p className="text-2xl font-black">{macros.cals}</p>
+                                 <p className="text-[10px] font-bold opacity-70 uppercase">Kcal</p>
+                             </div>
+                             <div>
+                                 <p className="text-xl font-bold">{macros.prot}g</p>
+                                 <p className="text-[10px] font-bold opacity-70 uppercase">Prot</p>
+                             </div>
+                             <div>
+                                 <p className="text-xl font-bold">{macros.carbs}g</p>
+                                 <p className="text-[10px] font-bold opacity-70 uppercase">Carb</p>
+                             </div>
+                             <div>
+                                 <p className="text-xl font-bold">{macros.fats}g</p>
+                                 <p className="text-[10px] font-bold opacity-70 uppercase">Fat</p>
+                             </div>
+                         </div>
+                     </div>
+                 )}
+
+                 {diet.map((meal, i) => (
+                     <div key={i} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/5">
+                         <div className="flex justify-between items-center mb-4">
+                             <h3 className="font-black text-lg text-black dark:text-white">{meal.name}</h3>
+                             <span className="text-xs font-bold text-gray-500 bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-lg">{meal.time}</span>
+                         </div>
+                         <div className="space-y-3">
+                             {meal.items.map((item, j) => (
+                                 <div key={j} className="flex justify-between items-start border-b border-gray-50 dark:border-white/5 pb-2 last:border-0">
+                                     <div>
+                                         <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">{item.food}</p>
+                                         <p className="text-[10px] text-gray-500 mt-0.5">{item.calories} kcal • P:{item.protein} C:{item.carbs} F:{item.fats}</p>
+                                     </div>
+                                     <p className="font-bold text-gray-500 text-sm">{item.portion}</p>
+                                 </div>
+                             ))}
+                         </div>
+                         {meal.notes && (
+                            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl text-xs text-blue-700 dark:text-blue-300 leading-relaxed border border-blue-100 dark:border-blue-900/20">
+                                <strong>Note:</strong> {meal.notes}
+                            </div>
+                         )}
+                     </div>
+                 ))}
+                 {diet.length === 0 && <div className="text-center py-10 text-gray-400 italic">No nutrition plan assigned yet.</div>}
+            </div>
+        ) : (
+            <div className="space-y-4 animate-slideUp">
+                {workout.map((day, i) => (
+                    <div key={i} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/5">
+                         <h3 className="font-black text-xl text-black dark:text-white mb-2 flex items-center gap-2">
+                            <span className="w-1.5 h-6 bg-blue-500 rounded-full"></span>
+                            {day.name}
+                         </h3>
+                         {day.notes && <p className="text-xs text-gray-500 mb-4 italic pl-3 border-l-2 border-gray-200 dark:border-white/10">{day.notes}</p>}
+                         
+                         <div className="space-y-3">
+                             {day.exercises.map((ex, j) => (
+                                 <div key={j} className="bg-gray-50 dark:bg-black/20 p-4 rounded-2xl">
+                                     <div className="flex justify-between items-start mb-2">
+                                         <h4 className="font-bold text-black dark:text-white">{ex.name}</h4>
+                                         {ex.videoUrl && <a href={ex.videoUrl} target="_blank" className="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1 hover:underline"><Eye size={10}/> Video</a>}
+                                     </div>
+                                     <div className="grid grid-cols-4 gap-2 text-center mb-2">
+                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
+                                             <p className="text-[8px] text-gray-400 uppercase font-black">Sets</p>
+                                             <p className="font-bold text-black dark:text-white">{ex.sets}</p>
+                                         </div>
+                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
+                                             <p className="text-[8px] text-gray-400 uppercase font-black">Reps</p>
+                                             <p className="font-bold text-black dark:text-white">{ex.reps}</p>
+                                         </div>
+                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
+                                             <p className="text-[8px] text-gray-400 uppercase font-black">Rest</p>
+                                             <p className="font-bold text-black dark:text-white">{ex.rest || '-'}</p>
+                                         </div>
+                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
+                                             <p className="text-[8px] text-gray-400 uppercase font-black">RPE</p>
+                                             <p className="font-bold text-black dark:text-white">{ex.rpe || '-'}</p>
+                                         </div>
+                                     </div>
+                                     {(ex.notes || ex.equipmentNeeded) && (
+                                         <div className="flex flex-wrap gap-2 mt-2">
+                                             {ex.equipmentNeeded && <span className="text-[9px] bg-white dark:bg-white/5 px-2 py-0.5 rounded border border-gray-100 dark:border-white/10 text-gray-500">{ex.equipmentNeeded}</span>}
+                                             {ex.notes && <p className="text-[10px] text-gray-500 italic flex-1">{ex.notes}</p>}
+                                         </div>
+                                     )}
+                                 </div>
+                             ))}
+                         </div>
+                    </div>
+                ))}
+                {workout.length === 0 && <div className="text-center py-10 text-gray-400 italic">No training program assigned yet.</div>}
+            </div>
+        )}
+
+        {/* PDF Modal Triggered by Button */}
+        {showPdf && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fadeIn">
+              <div className="bg-white dark:bg-[#1C1C1E] p-8 rounded-[40px] w-full max-w-sm shadow-2xl relative">
+                  <button onClick={() => setShowPdf(false)} className="absolute top-6 right-6 p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-full transition"><X size={20}/></button>
+                  <PlanPDF 
+                    client={client} 
+                    type={diet.length > 0 && workout.length > 0 ? 'full' : (diet.length > 0 ? 'diet' : 'workout')} 
+                    dietData={diet} 
+                    workoutData={workout}
+                    onClose={() => setShowPdf(false)} 
+                  />
+              </div>
+            </div>
+        )}
+     </div>
+  );
+};
+
+// --- Main Plan Manager ---
+
 const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, viewingClient }) => {
-  // If viewingClient is present, default to 'clients' tab (which we will repurpose as 'My Plan')
-  const [activeTab, setActiveTab] = useState<'templates' | 'clients' | 'library'>(viewingClient ? 'clients' : 'templates');
+  const [activeTab, setActiveTab] = useState<'templates' | 'clients' | 'library'>('templates');
   const [templateType, setTemplateType] = useState<'diet' | 'workout'>('diet');
   const [templates, setTemplates] = useState<PlanTemplate[]>([]);
   const [foodLibrary, setFoodLibrary] = useState<FoodItem[]>([]);
@@ -49,7 +207,19 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
     setFoodLibrary(loadFoodLibrary());
   }, []);
 
-  // --- Food Library Logic ---
+  // --- If viewing client (Client Mode), render dedicated view ---
+  if (viewingClient) {
+      return (
+          <div className="animate-fadeIn min-h-screen">
+              <div className="pt-2 px-1 mb-6 flex justify-between items-end">
+                  <h1 className="text-[34px] font-black text-black dark:text-white leading-tight tracking-tight">My Plan</h1>
+              </div>
+              <ClientPlanView client={viewingClient} />
+          </div>
+      );
+  }
+
+  // --- Food Library Logic (Admin) ---
   const handleAddFood = () => {
     if (!newFood.name || !newFood.calories) return alert("Name and Calories are required");
     const item: FoodItem = { ...newFood, id: uuidv4(), category: newFood.category || 'Other' };
@@ -153,22 +323,6 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
   };
 
   const startEditClient = (c: Client) => {
-      if (viewingClient) {
-          // In Client View, clicking usually does nothing or opens a read-only view. 
-          // But we will use the PDF preview for the read-only view.
-          const hasDiet = Array.isArray(c.dietPlan) && c.dietPlan.length > 0;
-          const hasWorkout = Array.isArray(c.workoutRoutine) && c.workoutRoutine.length > 0;
-          if (hasDiet || hasWorkout) {
-               setShowPdf({ 
-                    type: (hasDiet && hasWorkout) ? 'full' : (hasDiet ? 'diet' : 'workout'), 
-                    clientName: c.name, 
-                    data: undefined, 
-                    client: c
-               });
-          }
-          return;
-      }
-
       setEditingClient(c);
       // Load existing data or empty
       const existing = templateType === 'diet' ? c.dietPlan : c.workoutRoutine;
@@ -196,7 +350,7 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
       });
   };
 
-  // --- Render ---
+  // --- Render (Admin Mode) ---
 
   // 1. Editor View (Full-screen Overlay)
   if (editingTemplate || editingClient) {
@@ -283,26 +437,22 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
       );
   }
 
-  // 2. Main List View
+  // 2. Main List View (Admin)
   return (
     <div className="animate-fadeIn min-h-screen">
       <div className="pt-2 px-1 mb-4 flex justify-between items-end">
-         <h1 className="text-[34px] font-black text-black dark:text-white leading-tight tracking-tight">{viewingClient ? 'My Plan' : 'Plans'}</h1>
-         {!viewingClient && (
-            <button onClick={() => activeTab === 'library' ? setShowAddFood(true) : startCreateTemplate()} className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition mb-1">
-                <Plus size={24} />
-            </button>
-         )}
+         <h1 className="text-[34px] font-black text-black dark:text-white leading-tight tracking-tight">Plans</h1>
+         <button onClick={() => activeTab === 'library' ? setShowAddFood(true) : startCreateTemplate()} className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg active:scale-90 transition mb-1">
+             <Plus size={24} />
+         </button>
       </div>
 
-      {/* Main Tabs (Hidden in Client Mode) */}
-      {!viewingClient && (
-          <div className="flex p-1 bg-gray-200 dark:bg-gray-800 rounded-2xl mb-6">
-              <button onClick={() => setActiveTab('templates')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'templates' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>Samples</button>
-              <button onClick={() => setActiveTab('clients')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'clients' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>My Clients</button>
-              <button onClick={() => setActiveTab('library')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'library' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>Food Lib</button>
-          </div>
-      )}
+      {/* Main Tabs */}
+      <div className="flex p-1 bg-gray-200 dark:bg-gray-800 rounded-2xl mb-6">
+          <button onClick={() => setActiveTab('templates')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'templates' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>Samples</button>
+          <button onClick={() => setActiveTab('clients')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'clients' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>My Clients</button>
+          <button onClick={() => setActiveTab('library')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'library' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>Food Lib</button>
+      </div>
 
       {/* --- FOOD LIBRARY TAB --- */}
       {activeTab === 'library' && (
@@ -434,20 +584,15 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
 
       {activeTab === 'clients' && (
           <div className="space-y-4">
-              {!viewingClient && (
-                  <div className="relative mb-6">
-                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                      <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search client plans..." className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
-                  </div>
-              )}
+              <div className="relative mb-6">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search client plans..." className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
+              </div>
 
               {clients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => {
                   const hasDiet = Array.isArray(c.dietPlan) && c.dietPlan.length > 0;
                   const hasWorkout = Array.isArray(c.workoutRoutine) && c.workoutRoutine.length > 0;
                   
-                  // In Client Mode, verify this is the active client
-                  if (viewingClient && c.id !== viewingClient.id) return null;
-
                   return (
                     <div key={c.id} onClick={() => startEditClient(c)} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[32px] shadow-sm border border-gray-100 dark:border-white/5 flex justify-between items-center cursor-pointer active:scale-[0.99] transition">
                         <div className="flex items-center gap-4">
@@ -455,7 +600,7 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
                                 {c.name.charAt(0)}
                             </div>
                             <div>
-                                <h3 className="font-black text-black dark:text-white text-lg leading-none mb-1">{viewingClient ? "Your Active Plan" : c.name}</h3>
+                                <h3 className="font-black text-black dark:text-white text-lg leading-none mb-1">{c.name}</h3>
                                 <div className="flex gap-2">
                                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${hasDiet ? 'bg-green-100 text-green-700 dark:bg-green-900/30' : 'bg-gray-100 text-gray-400 dark:bg-white/5'}`}>Nutrition</span>
                                     <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${hasWorkout ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30' : 'bg-gray-100 text-gray-400 dark:bg-white/5'}`}>Training</span>
@@ -474,13 +619,12 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
                                             client: c
                                         }); 
                                     }} 
-                                    className={`p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-2xl hover:bg-blue-100 transition shadow-sm border border-blue-100 dark:border-blue-900/30 ${viewingClient ? 'px-6 flex gap-2 font-bold text-xs items-center' : ''}`}
+                                    className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-2xl hover:bg-blue-100 transition shadow-sm border border-blue-100 dark:border-blue-900/30"
                                  >
                                      <Download size={18} />
-                                     {viewingClient && <span>View Plan</span>}
                                  </button>
                              )}
-                             {!viewingClient && <ChevronRight size={20} className="text-gray-300"/>}
+                             <ChevronRight size={20} className="text-gray-300"/>
                         </div>
                     </div>
                   );

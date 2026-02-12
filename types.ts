@@ -1,5 +1,4 @@
 
-
 export type SessionStatus = 'scheduled' | 'completed' | 'missed' | 'cancelled';
 
 export interface Session {
@@ -91,6 +90,7 @@ export interface Client {
   name: string;
   email: string;
   phone: string;
+  accessCode?: string; // New: 5-digit login code
   startDate: string; // YYYY-MM-DD
   expiryDate: string; // YYYY-MM-DD
   defaultTimeSlot: string;
