@@ -2,8 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { Client, NavPage, Session, DietMeal } from '../types';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie, YAxis } from 'recharts';
-import { DollarSign, ChevronRight, TrendingUp, Clock, Bell, X, BarChart3, Trophy, Target, PlayCircle, CheckCircle2, AlertTriangle, RefreshCcw, PieChart as PieIcon, CalendarDays, Sun, Moon, Link, Utensils, Zap } from 'lucide-react';
-import { format, addDays, subMonths, isSameDay, differenceInDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, parse, differenceInMinutes, isBefore, getDay } from 'date-fns';
+import { DollarSign, ChevronRight, TrendingUp, Clock, Bell, X, BarChart3, Trophy, Target, PlayCircle, CheckCircle2, AlertTriangle, RefreshCcw, PieChart as PieIcon, CalendarDays, Sun, Moon, Link, Utensils, Zap, Users } from 'lucide-react';
+import { format, addDays, subMonths, isSameDay, differenceInDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek, isToday, parse, differenceInMinutes, isBefore, isAfter, getDay } from 'date-fns';
 
 interface WidgetProps {
   children?: React.ReactNode;
@@ -113,6 +113,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
      const percentage = Math.min(100, Math.round((bookedHours / WEEKLY_CAPACITY_HOURS) * 100));
      return { bookedHours, percentage };
   }, [clients, viewingClient]);
+
+  // --- Active Clients Stats ---
+  const activeClientsCount = useMemo(() => {
+    if (viewingClient) return 0;
+    return clients.filter(c => {
+        const expiry = new Date(c.expiryDate);
+        return isAfter(expiry, now) || isSameDay(expiry, now);
+    }).length;
+  }, [clients, viewingClient, now]);
 
   // --- Relevant Sessions ---
   const relevantSessions = useMemo(() => {
@@ -340,7 +349,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
           </Widget>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Monthly Goal */}
+            {/* Active Clients */}
+            <Widget title="Active Clients" subtitle="Current" icon={Users} iconColor="text-indigo-500" onClick={() => navigateTo(NavPage.CLIENTS)}>
+                <div className="mt-2">
+                    <span className="text-2xl font-black text-black dark:text-white">{activeClientsCount}</span>
+                    <div className="h-1.5 w-full bg-gray-100 dark:bg-white/5 rounded-full mt-3 overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${clients.length > 0 ? (activeClientsCount / clients.length) * 100 : 0}%` }}></div>
+                    </div>
+                </div>
+            </Widget>
+
+            {/* Monthly Revenue */}
             <Widget title="Revenue" subtitle="This Month" icon={DollarSign} iconColor="text-green-500">
                 <div className="mt-2">
                     <span className="text-2xl font-black text-black dark:text-white">{currency}{(performanceStats.month.revenue / 1000).toFixed(1)}k</span>
@@ -357,6 +376,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
                     <div className="h-1.5 w-full bg-gray-100 dark:bg-white/5 rounded-full mt-3 overflow-hidden">
                         <div className="h-full bg-purple-500 rounded-full" style={{ width: `${capacityStats.percentage}%` }}></div>
                     </div>
+                </div>
+            </Widget>
+
+            {/* Renewals Alert */}
+            <Widget title="Renewals" subtitle="Action Needed" icon={RefreshCcw} iconColor="text-red-500">
+                <div className="mt-2 space-y-2">
+                    {expiringClients.length > 0 ? expiringClients.slice(0, 2).map(c => {
+                        const expiry = new Date(c.expiryDate);
+                        const isPast = isBefore(expiry, now);
+                        return (
+                            <div key={c.id} className="flex items-center justify-between p-2 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20">
+                                <span className="text-xs font-bold text-black dark:text-white truncate max-w-[80px]">{c.name.split(' ')[0]}</span>
+                                <span className="text-[9px] font-bold text-red-600 uppercase">
+                                    {isPast ? 'Exp' : `${differenceInDays(expiry, now)}d`}
+                                </span>
+                            </div>
+                        );
+                    }) : <p className="text-xs text-gray-400 font-medium py-2">No alerts.</p>}
                 </div>
             </Widget>
 
@@ -383,27 +420,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ clients, navigateTo, curre
                         </Bar>
                     </BarChart>
                     </ResponsiveContainer>
-                </div>
-            </Widget>
-
-            {/* Renewals Alert */}
-            <Widget className="col-span-2" title="Renewals" subtitle="Action Needed" icon={RefreshCcw} iconColor="text-red-500">
-                <div className="mt-2 space-y-2">
-                    {expiringClients.length > 0 ? expiringClients.slice(0, 3).map(c => {
-                        const expiry = new Date(c.expiryDate);
-                        const isPast = isBefore(expiry, now);
-                        return (
-                            <div key={c.id} className="flex items-center justify-between p-3 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                                    <span className="text-sm font-bold text-black dark:text-white">{c.name}</span>
-                                </div>
-                                <span className="text-[10px] font-bold text-red-600 uppercase bg-white dark:bg-black/20 px-2 py-1 rounded-lg">
-                                    {isPast ? 'Expired' : `${differenceInDays(expiry, now)}d left`}
-                                </span>
-                            </div>
-                        );
-                    }) : <p className="text-xs text-gray-400 font-medium py-2">All client packages are healthy.</p>}
                 </div>
             </Widget>
           </div>

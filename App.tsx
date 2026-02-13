@@ -2,13 +2,14 @@
 import React, { useState, useEffect, ErrorInfo, Component } from 'react';
 import { Client, NavPage } from './types';
 import { saveClients, loadClients } from './services/storage';
-import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, AlertTriangle, Loader2, FileText } from 'lucide-react';
 import { Dashboard } from './components/Dashboard';
 import ClientList from './components/ClientList';
 import ClientForm from './components/ClientForm';
 import Schedule from './components/Schedule';
 import Settings from './components/Settings';
 import PlanManager from './components/PlanManager';
+import LoginScreen from './components/LoginScreen';
 import { useAuth } from './contexts/AuthContext';
 
 // --- Error Boundary ---
@@ -58,7 +59,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 const AppContent: React.FC = () => {
   const { user } = useAuth(); 
   const [clients, setClients] = useState<Client[]>([]);
-  const [currentPage, setCurrentPage] = useState<NavPage>(NavPage.CLIENTS);
+  const [currentPage, setCurrentPage] = useState<NavPage>(NavPage.DASHBOARD);
   const [editingClient, setEditingClient] = useState<Client | undefined>(undefined);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [currency, setCurrency] = useState('₹');
@@ -176,13 +177,119 @@ const AppContent: React.FC = () => {
     setCurrentPage(NavPage.ADD_CLIENT);
   };
 
+  const handleUpdateClient = (updatedClient: Client) => {
+      setClients(clients.map(c => c.id === updatedClient.id ? updatedClient : c));
+  };
+
+  // Determine if we are in Client View (Guest or Code login)
+  const isClientUser = user?.uid === 'client-user';
+  // Mock logic to select a client for "Client View" if logged in as client
+  const viewingClient = isClientUser ? (clients.length > 0 ? clients[0] : undefined) : undefined;
+
   const TabButton = ({ page, icon: Icon, label }: { page: NavPage, icon: any, label: string }) => (
     <button
       onClick={() => setCurrentPage(page)}
       className={`flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${
-        currentPage === page ? 'text-ios-blue' : 'text-ios-gray'
+        currentPage === page ? 'text-blue-600 dark:text-blue-500' : 'text-gray-400'
       }`}
     >
       <Icon size={26} strokeWidth={currentPage === page ? 2.5 : 2} />
       <span className="text-[10px] font-medium tracking-tight">{label}</span>
-    </
+    </button>
+  );
+
+  return (
+    <div className="bg-[#F2F2F7] dark:bg-black min-h-screen pb-20 sm:pb-0 flex justify-center">
+      <div className="w-full max-w-2xl bg-[#F2F2F7] dark:bg-black min-h-screen relative shadow-2xl flex flex-col">
+          
+          <div className="flex-1 overflow-y-auto no-scrollbar p-6">
+             {currentPage === NavPage.DASHBOARD && (
+                 <Dashboard clients={clients} navigateTo={setCurrentPage} currency={currency} viewingClient={viewingClient} />
+             )}
+             
+             {currentPage === NavPage.CLIENTS && !editingClient && (
+                 <ClientList 
+                    clients={clients} 
+                    onEdit={(client) => { setEditingClient(client); setCurrentPage(NavPage.ADD_CLIENT); }} 
+                    onDelete={handleDeleteClient}
+                    onAdd={startAdd}
+                    currency={currency}
+                 />
+             )}
+             
+             {currentPage === NavPage.ADD_CLIENT && (
+                 <ClientForm 
+                    onSave={handleSaveClient} 
+                    onCancel={() => { setEditingClient(undefined); setCurrentPage(NavPage.CLIENTS); }}
+                    initialData={editingClient}
+                    currency={currency}
+                 />
+             )}
+
+             {currentPage === NavPage.PLANS && (
+                 <PlanManager clients={clients} onUpdateClient={handleUpdateClient} viewingClient={viewingClient} />
+             )}
+             
+             {currentPage === NavPage.SCHEDULE && (
+                 <Schedule clients={clients} onUpdateClient={handleUpdateClient} viewingClient={viewingClient} />
+             )}
+             
+             {currentPage === NavPage.SETTINGS && (
+                 <Settings 
+                    clients={clients}
+                    isDarkMode={isDarkMode}
+                    toggleTheme={() => setIsDarkMode(!isDarkMode)}
+                    currency={currency}
+                    setCurrency={setCurrency}
+                    onRestore={setClients}
+                    undo={() => {}}
+                    redo={() => {}}
+                    canUndo={false}
+                    canRedo={false}
+                 />
+             )}
+          </div>
+
+          {/* Bottom Navigation */}
+          {!editingClient && !viewingClient && (
+            <div className="fixed bottom-0 left-0 right-0 sm:relative bg-white dark:bg-[#1C1C1E] border-t border-gray-200 dark:border-gray-800 h-[83px] sm:h-20 pb-5 sm:pb-0 flex justify-around items-center px-2 z-40 max-w-2xl mx-auto w-full">
+               <TabButton page={NavPage.DASHBOARD} icon={LayoutDashboard} label="Overview" />
+               <TabButton page={NavPage.CLIENTS} icon={Users} label="Clients" />
+               <TabButton page={NavPage.SCHEDULE} icon={Calendar} label="Schedule" />
+               <TabButton page={NavPage.PLANS} icon={FileText} label="Plans" />
+               <TabButton page={NavPage.SETTINGS} icon={SettingsIcon} label="Settings" />
+            </div>
+          )}
+          
+          {/* Client Mode Navigation */}
+          {viewingClient && (
+            <div className="fixed bottom-0 left-0 right-0 sm:relative bg-white dark:bg-[#1C1C1E] border-t border-gray-200 dark:border-gray-800 h-[83px] sm:h-20 pb-5 sm:pb-0 flex justify-around items-center px-2 z-40 max-w-2xl mx-auto w-full">
+               <TabButton page={NavPage.DASHBOARD} icon={LayoutDashboard} label="Home" />
+               <TabButton page={NavPage.PLANS} icon={FileText} label="My Plan" />
+               <TabButton page={NavPage.SCHEDULE} icon={Calendar} label="Schedule" />
+            </div>
+          )}
+      </div>
+    </div>
+  );
+};
+
+const App: React.FC = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+      return (
+          <div className="min-h-screen flex items-center justify-center bg-[#F2F2F7] dark:bg-black">
+              <Loader2 className="animate-spin text-blue-600 w-8 h-8" />
+          </div>
+      );
+  }
+
+  return (
+    <ErrorBoundary>
+      {user ? <AppContent /> : <LoginScreen />}
+    </ErrorBoundary>
+  );
+};
+
+export default App;
