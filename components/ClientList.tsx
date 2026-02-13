@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { Client } from '../types';
-import { Search, Download, Trash2, ChevronRight, Plus, RefreshCcw, AlertTriangle, CheckCircle2, CircleDot, Info } from 'lucide-react';
+import { Search, Download, Trash2, ChevronRight, Plus, RefreshCcw, AlertTriangle, CheckCircle2, Info, MoreHorizontal } from 'lucide-react';
 import Invoice from './Invoice';
-import { isBefore, differenceInDays, parseISO, isAfter } from 'date-fns';
+import { isBefore, differenceInDays, parseISO, isAfter, isSameDay } from 'date-fns';
 
 interface ClientListProps {
   clients: Client[];
@@ -28,11 +29,17 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onEdit, onDelete, onAd
   };
 
   const getGradient = (name: string) => {
-     const gradients = ['from-blue-400 to-blue-600', 'from-purple-400 to-purple-600', 'from-green-400 to-green-600', 'from-orange-400 to-orange-600', 'from-pink-400 to-pink-600'];
+     const gradients = [
+       'from-blue-500 to-cyan-500', 
+       'from-purple-500 to-pink-500', 
+       'from-orange-400 to-red-500', 
+       'from-emerald-400 to-green-600',
+       'from-indigo-500 to-purple-600'
+     ];
      return gradients[name.length % gradients.length];
   };
 
-  const getClientStatusData = (client: Client): { status: ClientStatus; color: string; icon: any } => {
+  const getClientStatusData = (client: Client): { status: ClientStatus; color: string; bg: string; icon: any } => {
     const today = new Date();
     const expiry = parseISO(client.expiryDate);
     const isExpired = isBefore(expiry, today);
@@ -44,96 +51,106 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onEdit, onDelete, onAd
       return (isAfter(sDate, today) || isSameDay(sDate, today)) && s.status !== 'cancelled' && s.status !== 'completed';
     });
 
-    if (isExpired) {
-      return { status: 'Expired', color: 'bg-red-500', icon: RefreshCcw };
-    }
-    if (daysUntilExpiry <= 7) {
-      return { status: 'Expiring Soon', color: 'bg-orange-500', icon: AlertTriangle };
-    }
-    if (missedSessions || (!futureSessions && !isExpired)) {
-      return { status: 'Needs Follow-up', color: 'bg-ios-blue', icon: Info };
-    }
-    return { status: 'Active', color: 'bg-ios-green', icon: CheckCircle2 };
-  };
-
-  const isSameDay = (d1: Date, d2: Date) => {
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
+    if (isExpired) return { status: 'Expired', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', icon: RefreshCcw };
+    if (daysUntilExpiry <= 7) return { status: 'Expiring Soon', color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', icon: AlertTriangle };
+    if (missedSessions || (!futureSessions && !isExpired)) return { status: 'Needs Follow-up', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', icon: Info };
+    return { status: 'Active', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20', icon: CheckCircle2 };
   };
 
   return (
     <div className="space-y-0 animate-fadeIn min-h-screen">
-      <div className="pt-2 px-1 mb-4 flex justify-between items-end">
-         <h1 className="text-[34px] font-bold text-black dark:text-white leading-tight">Clients</h1>
-         <button onClick={onAdd} className="w-9 h-9 rounded-full bg-ios-blue text-white flex items-center justify-center shadow-md active:scale-90 transition mb-2">
-           <Plus size={22} />
+      <div className="pt-2 px-1 mb-6 flex justify-between items-end">
+         <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Directory</p>
+            <h1 className="text-[34px] font-black text-black dark:text-white leading-tight">Clients</h1>
+         </div>
+         <button onClick={onAdd} className="w-12 h-12 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-lg active:scale-90 transition mb-1">
+           <Plus size={24} />
          </button>
       </div>
 
-      <div className="px-0 mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-ios-gray" size={16} />
+      <div className="px-0 mb-6 sticky top-2 z-30">
+        <div className="relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
           <input 
-            type="text" placeholder="Search" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-[#767680]/15 dark:bg-[#767680]/25 text-black dark:text-white rounded-[10px] outline-none placeholder-ios-gray text-[17px] focus:bg-[#767680]/20 transition-colors"
+            type="text" placeholder="Search clients..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-[#1C1C1E] text-black dark:text-white rounded-2xl outline-none placeholder-gray-400 text-sm font-medium shadow-sm border border-gray-100 dark:border-white/5 focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all"
           />
         </div>
       </div>
 
       {filteredClients.length > 0 ? (
-        <div className="bg-ios-card-light dark:bg-ios-card-dark rounded-xl overflow-hidden shadow-sm">
+        <div className="space-y-3 pb-24">
           {filteredClients.map((client, index) => {
              const due = client.totalFee - client.paidAmount;
-             const isLast = index === filteredClients.length - 1;
              const completedSessions = client.sessions.filter(s => s.status === 'completed' || s.completed).length;
              const totalSessions = client.sessions.length;
+             const progress = totalSessions > 0 ? (completedSessions / totalSessions) * 100 : 0;
              
              const statusData = getClientStatusData(client);
              const StatusIcon = statusData.icon;
 
              return (
-              <div key={client.id} onClick={() => onEdit(client)} className={`flex items-center p-4 pl-4 cursor-pointer active:bg-[#E5E5EA] dark:active:bg-[#2C2C2E] transition-colors relative`}>
-                <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getGradient(client.name)} flex items-center justify-center text-white font-semibold text-lg shadow-sm mr-4 shrink-0`}>
+              <div 
+                key={client.id} 
+                onClick={() => onEdit(client)} 
+                className="bg-white dark:bg-[#1C1C1E] rounded-3xl p-4 flex items-center gap-4 shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer active:scale-[0.98] transition-all animate-slideUp"
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getGradient(client.name)} flex items-center justify-center text-white font-bold text-lg shadow-md shrink-0`}>
                   {getInitials(client.name)}
                 </div>
 
-                <div className={`flex-1 flex justify-between items-center py-1 ${!isLast ? 'border-b border-ios-separator-light dark:border-ios-separator-dark pb-5 mb-[-20px]' : ''}`}>
-                   <div className="flex-1 min-w-0 mr-2">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-black dark:text-white text-[17px] truncate">{client.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`${statusData.color} text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase flex items-center gap-1 shadow-sm`}>
-                             <StatusIcon size={9} strokeWidth={3} />
-                             {statusData.status}
-                          </span>
-                          <div className="text-[13px] text-ios-gray flex items-center gap-1.5">
-                             <span>{completedSessions}/{totalSessions} sessions</span>
-                             {due > 0 ? <span className="text-ios-red font-bold">Due {currency}{due}</span> : <span className="text-ios-green font-bold">Paid</span>}
-                          </div>
-                        </div>
-                      </div>
-                   </div>
-                   <div className="flex items-center gap-2">
-                       <button onClick={(e) => { e.stopPropagation(); setInvoiceClient(client); }} className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center active:scale-90 transition-transform border border-blue-100 dark:border-blue-900/50">
-                         <Download size={16} />
-                       </button>
-                       <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Delete this client?')) onDelete(client.id); }} className="w-8 h-8 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center active:scale-90 transition-transform border border-red-100 dark:border-red-900/50">
-                         <Trash2 size={16} />
-                       </button>
-                       <ChevronRight size={18} className="text-ios-gray3" />
-                   </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-1">
+                        <h3 className="font-bold text-black dark:text-white text-lg truncate">{client.name}</h3>
+                        {due > 0 && (
+                            <span className="text-[10px] font-black bg-red-50 dark:bg-red-900/20 text-red-600 px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                Due {currency}{due}
+                            </span>
+                        )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 mt-1">
+                         <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg ${statusData.bg} ${statusData.color}`}>
+                             <StatusIcon size={10} strokeWidth={3} />
+                             <span className="text-[10px] font-bold uppercase tracking-wide">{statusData.status}</span>
+                         </div>
+                    </div>
+                    
+                    {/* Session Progress Bar */}
+                    <div className="mt-3 flex items-center gap-2">
+                         <div className="flex-1 h-1.5 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
+                             <div 
+                                className="h-full bg-blue-500 rounded-full transition-all duration-500" 
+                                style={{ width: `${progress}%` }} 
+                             />
+                         </div>
+                         <span className="text-[10px] font-bold text-gray-400 whitespace-nowrap">
+                             {completedSessions}/{totalSessions} Done
+                         </span>
+                    </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                    <button onClick={(e) => { e.stopPropagation(); setInvoiceClient(client); }} className="w-8 h-8 rounded-full bg-gray-50 dark:bg-white/5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition flex items-center justify-center">
+                        <Download size={16} />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); if(window.confirm('Delete this client?')) onDelete(client.id); }} className="w-8 h-8 rounded-full bg-gray-50 dark:bg-white/5 text-gray-400 hover:text-red-500 hover:bg-red-50 transition flex items-center justify-center">
+                        <Trash2 size={16} />
+                    </button>
                 </div>
               </div>
              );
           })}
         </div>
       ) : (
-        <div className="text-center py-20">
-          <p className="text-ios-gray text-[17px]">No clients found</p>
-          <button onClick={onAdd} className="mt-4 text-ios-blue text-[17px] font-medium">Add Client</button>
+        <div className="text-center py-24 bg-white dark:bg-[#1C1C1E] rounded-3xl border border-dashed border-gray-200 dark:border-white/10">
+          <div className="w-16 h-16 bg-gray-50 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+              <Search size={24} />
+          </div>
+          <p className="text-gray-400 font-medium">No clients found</p>
+          <button onClick={onAdd} className="mt-4 text-black dark:text-white font-black text-sm uppercase tracking-wide hover:underline">Add New Client</button>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, Component, ErrorInfo } from 'react';
+import React, { useState, useEffect, ErrorInfo, Component } from 'react';
 import { Client, NavPage } from './types';
 import { saveClients, loadClients } from './services/storage';
 import { LayoutDashboard, Users, Calendar, Settings as SettingsIcon, AlertTriangle } from 'lucide-react';
@@ -12,13 +12,19 @@ import PlanManager from './components/PlanManager';
 import { useAuth } from './contexts/AuthContext';
 
 // --- Error Boundary ---
-class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+interface ErrorBoundaryProps {
+  children?: React.ReactNode;
+}
 
-  static getDerivedStateFromError(error: Error) {
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
@@ -97,23 +103,49 @@ const AppContent: React.FC = () => {
     }
   }, [clients]);
 
-  // Push Notifications Checker
+  // Push Notifications Checker (Sessions + Backup)
   useEffect(() => {
     const checkNotifications = () => {
       const enabled = localStorage.getItem('notifications_enabled') === 'true';
       if (!enabled || Notification.permission !== 'granted') return;
+      
       const now = new Date();
+      const currentHour = now.getHours();
+      
+      // 1. Session Reminders
       clients.forEach(client => {
         client.sessions.forEach(session => {
            if (session.completed || session.status === 'cancelled' || session.status === 'missed') return;
            const sessionTime = new Date(`${session.date}T${session.time}`);
            const diffMins = (sessionTime.getTime() - now.getTime()) / (1000 * 60);
            if (diffMins >= 14 && diffMins < 15) {
-              new Notification(`Upcoming Session`, { body: `Starts at ${session.time}` });
+              new Notification(`Upcoming Session: ${client.name}`, { body: `Starts at ${session.time}` });
            }
         });
       });
+
+      // 2. Backup Reminders (Morning 9 AM & Evening 9 PM)
+      const todayStr = now.toDateString();
+      const lastBackup = localStorage.getItem('last_backup_notification');
+
+      // Morning Reminder (9:00 - 9:59)
+      if (currentHour === 9) {
+          if (!lastBackup || lastBackup !== `${todayStr}_AM`) {
+              new Notification("Backup Reminder 🛡️", { body: "Good morning! Don't forget to download a backup of your data in Settings." });
+              localStorage.setItem('last_backup_notification', `${todayStr}_AM`);
+          }
+      }
+
+      // Evening Reminder (21:00 - 21:59)
+      if (currentHour === 21) {
+          if (!lastBackup || lastBackup !== `${todayStr}_PM`) {
+              new Notification("Backup Reminder 🛡️", { body: "End of day check! Secure your client data by downloading a backup." });
+              localStorage.setItem('last_backup_notification', `${todayStr}_PM`);
+          }
+      }
     };
+    
+    // Check every minute
     const interval = setInterval(checkNotifications, 60000);
     return () => clearInterval(interval);
   }, [clients]);
@@ -153,74 +185,4 @@ const AppContent: React.FC = () => {
     >
       <Icon size={26} strokeWidth={currentPage === page ? 2.5 : 2} />
       <span className="text-[10px] font-medium tracking-tight">{label}</span>
-    </button>
-  );
-
-  return (
-    <div className={`min-h-screen font-sans antialiased selection:bg-ios-blue selection:text-white`}>
-      
-      {/* Main Content Area */}
-      <main className={`w-full max-w-2xl mx-auto pb-24 px-4 safe-top pt-8 safe-bottom min-h-screen relative`}>
-            <>
-                {currentPage === NavPage.DASHBOARD && <Dashboard clients={clients} navigateTo={setCurrentPage} currency={currency} />}
-                {currentPage === NavPage.CLIENTS && (
-                    <ClientList 
-                        clients={clients} 
-                        onEdit={(c) => { setEditingClient(c); setCurrentPage(NavPage.ADD_CLIENT); }} 
-                        onDelete={handleDeleteClient} 
-                        onAdd={startAdd} 
-                        currency={currency} 
-                    />
-                )}
-                {currentPage === NavPage.PLANS && <PlanManager clients={clients} onUpdateClient={handleSaveClient} />}
-                {currentPage === NavPage.SCHEDULE && <Schedule clients={clients} onUpdateClient={handleSaveClient} />}
-                {currentPage === NavPage.SETTINGS && (
-                    <Settings 
-                        clients={clients} 
-                        isDarkMode={isDarkMode} 
-                        toggleTheme={() => setIsDarkMode(!isDarkMode)} 
-                        currency={currency} 
-                        setCurrency={setCurrency} 
-                        onRestore={(d) => setClients(d)}
-                        undo={() => {}}
-                        redo={() => {}}
-                        canUndo={false}
-                        canRedo={false}
-                    />
-                )}
-                {currentPage === NavPage.ADD_CLIENT && (
-                    <ClientForm 
-                        onSave={handleSaveClient} 
-                        onCancel={() => setCurrentPage(NavPage.CLIENTS)} 
-                        initialData={editingClient} 
-                        currency={currency} 
-                    />
-                )}
-            </>
-      </main>
-
-      {/* iOS Translucent Tab Bar */}
-      {currentPage !== NavPage.ADD_CLIENT && (
-        <nav className="fixed bottom-0 w-full z-40 ios-blur border-t border-ios-separator-light/50 dark:border-ios-separator-dark/50 pb-safe safe-bottom no-print">
-          <div className="flex justify-around items-center h-[50px] max-w-2xl mx-auto pt-1">
-            <TabButton page={NavPage.DASHBOARD} icon={LayoutDashboard} label="Home" />
-            <TabButton page={NavPage.PLANS} icon={Users} label="Plans" />
-            <TabButton page={NavPage.SCHEDULE} icon={Calendar} label="Schedule" />
-            <TabButton page={NavPage.CLIENTS} icon={Users} label="Clients" />
-            <TabButton page={NavPage.SETTINGS} icon={SettingsIcon} label="Settings" />
-          </div>
-        </nav>
-      )}
-    </div>
-  );
-};
-
-const App: React.FC = () => {
-    return (
-        <ErrorBoundary>
-            <AppContent />
-        </ErrorBoundary>
-    );
-};
-
-export default App;
+    </

@@ -81,7 +81,7 @@ const Invoice: React.FC<InvoiceProps> = ({ client, onClose, currency }) => {
         <div id="invoice-content" className="flex-1 overflow-y-auto bg-white text-gray-900">
           
           {/* Printable Area Wrapper */}
-          <div id="printable-invoice-area" className="p-6 bg-white max-w-[800px] mx-auto">
+          <div id="printable-invoice-area" className="p-6 bg-white text-gray-900 max-w-[800px] mx-auto">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900 mb-0.5">INVOICE</h1>
@@ -95,13 +95,13 @@ const Invoice: React.FC<InvoiceProps> = ({ client, onClose, currency }) => {
               <div className="flex justify-between mb-6">
                 <div>
                   <h3 className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Bill To</h3>
-                  <p className="font-bold text-sm">{client.name}</p>
+                  <p className="font-bold text-sm text-gray-900">{client.name}</p>
                   {client.email && <p className="text-gray-500 text-xs">{client.email}</p>}
                   {client.phone && <p className="text-gray-500 text-xs">{client.phone}</p>}
                 </div>
                 <div className="text-right">
                   <h3 className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">From</h3>
-                  <p className="font-bold text-sm">FitwithRj</p>
+                  <p className="font-bold text-sm text-gray-900">FitwithRj</p>
                   <p className="text-gray-500 text-xs">Personal Training</p>
                 </div>
               </div>
@@ -114,7 +114,7 @@ const Invoice: React.FC<InvoiceProps> = ({ client, onClose, currency }) => {
                  </div>
                  <div className="p-3 flex justify-between items-center border-t border-gray-100">
                     <div className="col-span-2">
-                       <p className="font-medium text-sm">Personal Training Package</p>
+                       <p className="font-medium text-sm text-gray-900">Personal Training Package</p>
                        
                        {/* Recurring Details */}
                        {client.paymentPlan && client.paymentPlan.enabled ? (
@@ -129,7 +129,7 @@ const Invoice: React.FC<InvoiceProps> = ({ client, onClose, currency }) => {
                        
                        <p className="text-[10px] text-gray-400 mt-0.5">{format(new Date(client.startDate), 'MMM dd')} - {format(new Date(client.expiryDate), 'MMM dd, yyyy')}</p>
                     </div>
-                    <div className="text-right font-medium text-sm">
+                    <div className="text-right font-medium text-sm text-gray-900">
                       {currency}{client.totalFee.toFixed(2)}
                     </div>
                  </div>
@@ -147,7 +147,7 @@ const Invoice: React.FC<InvoiceProps> = ({ client, onClose, currency }) => {
                     <span>-{currency}{client.paidAmount.toFixed(2)}</span>
                   </div>
                   <div className="border-t border-gray-100 pt-1.5 flex justify-between items-center">
-                    <span className="font-bold text-sm">Total Due</span>
+                    <span className="font-bold text-sm text-gray-900">Total Due</span>
                     <span className="font-bold text-lg text-blue-600">{currency}{dueAmount.toFixed(2)}</span>
                   </div>
                 </div>

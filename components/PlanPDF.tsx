@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Client, DietMeal, WorkoutDay } from '../types';
 import { format } from 'date-fns';
-import { X, Download, Loader2, Dumbbell, Utensils, Info, Printer, ExternalLink, Signal } from 'lucide-react';
+import { X, Download, Loader2, Dumbbell, Utensils, Info, Printer, ExternalLink } from 'lucide-react';
 
 interface PlanPDFProps {
   client: Client;
@@ -47,6 +47,7 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
         }).catch((err: any) => {
             console.error(err);
             setIsDownloading(false);
+            alert("Error generating PDF. Please try again.");
         });
     } else {
         alert("PDF generator not ready.");
@@ -182,31 +183,41 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
   );
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-xl p-0 sm:p-4 animate-fadeIn">
-      <div className="bg-[#F2F2F7] dark:bg-black rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex justify-between items-center px-4 h-16 border-b bg-white dark:bg-[#1C1C1E] dark:border-white/5">
-           <div className="flex items-center gap-3">
-               <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-full transition active:scale-90"><X size={24} className="text-gray-500"/></button>
-               <h2 className="font-black text-black dark:text-white uppercase tracking-tight hidden sm:block">Program Preview</h2>
-           </div>
-           <button onClick={handleDownload} disabled={isDownloading} className="bg-blue-600 text-white font-black text-xs uppercase tracking-widest flex items-center gap-2 px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/20 transition active:scale-95 disabled:opacity-50 disabled:scale-100">
-                {isDownloading ? <Loader2 size={18} className="animate-spin" /> : <Printer size={18} />}
-                <span>{isDownloading ? 'Building PDF...' : 'Download Program'}</span>
-           </button>
+    <>
+    <div id="plan-modal-root" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn">
+      <div id="plan-container" className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl h-[95vh] sm:h-auto overflow-hidden flex flex-col">
+        {/* Modal Header */}
+        <div className="flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-2xl">
+          <button
+              onClick={onClose}
+              className="p-2 text-gray-500 hover:bg-gray-200 rounded-full transition"
+            >
+              <X size={24} />
+          </button>
+          <span className="font-semibold text-gray-700">Program Preview</span>
+          <button
+            onClick={handleDownload}
+            disabled={isDownloading}
+            className="text-blue-600 font-medium text-sm flex items-center gap-1 disabled:opacity-50"
+          >
+            {isDownloading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+            <span className="hidden sm:inline">{isDownloading ? 'Generating...' : 'Download PDF'}</span>
+          </button>
         </div>
 
-        {/* Content Preview Container */}
-        <div className="flex-1 overflow-y-auto bg-gray-200/50 dark:bg-zinc-900/50 p-4 sm:p-8">
-            <div id="printable-plan-area" className="bg-white shadow-2xl mx-auto max-w-[800px] min-h-[1000px] p-8 sm:p-14 relative rounded-sm">
+        {/* Scrollable Content */}
+        <div id="plan-content" className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-8">
+            {/* Printable Area Wrapper */}
+            <div id="printable-plan-area" className="bg-white shadow-xl mx-auto max-w-[800px] min-h-[1000px] p-8 sm:p-12 relative rounded-sm">
+                
                 {/* PDF Header */}
                 <div className="flex justify-between items-start mb-10 pb-8 border-b-4 border-gray-900">
                     <div>
-                        <h1 className="text-5xl font-black text-gray-900 uppercase tracking-tighter mb-1">FitwithRj</h1>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Personal Training Excellence</p>
+                        <h1 className="text-4xl sm:text-5xl font-black text-gray-900 uppercase tracking-tighter mb-1">FitwithRj</h1>
+                        <p className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Personal Training Excellence</p>
                     </div>
                     <div className="text-right">
-                        <h2 className="text-3xl font-black text-gray-800 uppercase tracking-tight">{client.name}</h2>
+                        <h2 className="text-2xl sm:text-3xl font-black text-gray-800 uppercase tracking-tight">{client.name}</h2>
                         <div className="flex flex-col items-end mt-2">
                             <span className="text-[10px] font-black text-white bg-black px-3 py-1 rounded uppercase tracking-widest">
                                 {type === 'full' ? 'Complete Transformation Program' : type === 'diet' ? 'Optimized Nutrition Plan' : 'Dynamic Training Routine'}
@@ -247,8 +258,21 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
                 </div>
             </div>
         </div>
+
+        {/* Mobile Action Button */}
+        <div className="p-4 border-t border-gray-100 sm:hidden bg-white safe-bottom">
+           <button 
+             onClick={handleDownload}
+             disabled={isDownloading}
+             className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition flex items-center justify-center gap-2 disabled:opacity-70"
+           >
+             {isDownloading ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />}
+             {isDownloading ? 'Generating...' : 'Download PDF'}
+           </button>
+        </div>
       </div>
     </div>
+    </>
   );
 };
 
