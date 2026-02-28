@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { Client, Session, PaymentFrequency, WeightEntry } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, isBefore, addWeeks, parse } from 'date-fns';
-import { ChevronLeft, ChevronRight, Repeat, ArrowRight, User, DollarSign, Calendar as CalendarIcon, RefreshCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Repeat, ArrowRight, User, DollarSign, Calendar as CalendarIcon, RefreshCcw, ChevronDown, ChevronUp, Key } from 'lucide-react';
 
 interface ClientFormProps {
   onSave: (client: Client) => void;
@@ -80,6 +79,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ onSave, onCancel, initialData, 
   const [name, setName] = useState(initialData?.name || '');
   const [email, setEmail] = useState(initialData?.email || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
+  const [accessCode, setAccessCode] = useState(initialData?.accessCode || Math.floor(10000 + Math.random() * 90000).toString());
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [weightHistory, setWeightHistory] = useState<WeightEntry[]>(initialData?.weightHistory || []);
 
@@ -160,7 +160,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ onSave, onCancel, initialData, 
       name, 
       email: email.trim(), 
       phone, 
-      accessCode: '00000', // Dummy code for type compatibility
+      accessCode: accessCode.trim() || '00000',
       startDate, expiryDate, defaultTimeSlot: timeSlot,
       totalFee: parseFloat(totalFee), paidAmount: parseFloat(paidAmount),
       paymentPlan: recurringEnabled ? { enabled: true, frequency: recurringFreq, amount: parseFloat(recurringAmount), count: parseInt(recurringCount) } : undefined,
@@ -202,6 +202,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ onSave, onCancel, initialData, 
                     <InputGroup label="Name"><input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full text-right bg-transparent outline-none text-black dark:text-white font-bold" placeholder="Full Name"/></InputGroup>
                     <InputGroup label="Email"><input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full text-right bg-transparent outline-none text-blue-500" placeholder="Optional"/></InputGroup>
                     <InputGroup label="Phone"><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full text-right bg-transparent outline-none text-blue-500" placeholder="Optional"/></InputGroup>
+                    <InputGroup label="Login Code"><div className="flex items-center justify-end gap-2"><Key size={14} className="text-gray-400"/><input type="text" value={accessCode} onChange={e => setAccessCode(e.target.value)} maxLength={5} className="w-20 text-right bg-transparent outline-none font-mono font-bold text-black dark:text-white" placeholder="00000"/></div></InputGroup>
                 </div>
                 
                 <div className="bg-gray-50 dark:bg-black/20 rounded-2xl p-4">

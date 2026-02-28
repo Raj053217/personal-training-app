@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { DietMeal, WorkoutDay, DietItem, WorkoutExercise, FoodItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Trash2, X, Utensils, Activity, FileText, Dumbbell, Signal, Video, Search, Book } from 'lucide-react';
+import { Plus, Trash2, X, Utensils, Activity, FileText, Dumbbell, Signal, Video, Search, Book, Copy, Zap } from 'lucide-react';
 
 interface PlanBuilderProps {
   type: 'diet' | 'workout';
@@ -20,6 +20,19 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange, fo
   // --- Diet Helpers ---
   const addMeal = () => onChange([...data, { id: uuidv4(), name: 'New Meal', items: [] }]);
   
+  const duplicateMeal = (mealId: string) => {
+      const mealToCopy = (data as DietMeal[]).find(m => m.id === mealId);
+      if (mealToCopy) {
+          const newMeal = {
+              ...mealToCopy,
+              id: uuidv4(),
+              name: `${mealToCopy.name} (Copy)`,
+              items: mealToCopy.items.map(i => ({ ...i, id: uuidv4() }))
+          };
+          onChange([...data, newMeal]);
+      }
+  };
+
   const updateMeal = (id: string, field: keyof DietMeal, val: string) => {
     onChange((data as DietMeal[]).map(m => m.id === id ? { ...m, [field]: val } : m));
   };
@@ -81,8 +94,47 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange, fo
 
   if (type === 'diet') {
       const dietData = (data || []) as DietMeal[];
+      
+      // Calculate Total Daily Macros
+      const dailyTotals = dietData.reduce((acc, meal) => {
+          meal.items.forEach(i => {
+              acc.cals += parseInt(i.calories || '0') || 0;
+              acc.prot += parseInt(i.protein || '0') || 0;
+              acc.carbs += parseInt(i.carbs || '0') || 0;
+              acc.fats += parseInt(i.fats || '0') || 0;
+          });
+          return acc;
+      }, { cals: 0, prot: 0, carbs: 0, fats: 0 });
+
       return (
-        <div className="space-y-4 animate-fadeIn">
+        <div className="space-y-4 animate-fadeIn pb-20">
+            {/* Sticky Daily Totals Bar */}
+            <div className="sticky top-0 z-10 bg-white/90 dark:bg-[#1C1C1E]/90 backdrop-blur-md p-3 -mx-2 mb-4 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg">
+                        <Zap size={16} fill="currentColor" />
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider leading-none">Daily Target</p>
+                        <p className="text-sm font-black text-black dark:text-white leading-none mt-0.5">{dailyTotals.cals} kcal</p>
+                    </div>
+                </div>
+                <div className="flex gap-3 text-center">
+                    <div>
+                        <p className="text-[9px] font-bold text-blue-400 uppercase">Prot</p>
+                        <p className="text-xs font-black text-black dark:text-white">{dailyTotals.prot}g</p>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-bold text-orange-400 uppercase">Carb</p>
+                        <p className="text-xs font-black text-black dark:text-white">{dailyTotals.carbs}g</p>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-bold text-yellow-400 uppercase">Fat</p>
+                        <p className="text-xs font-black text-black dark:text-white">{dailyTotals.fats}g</p>
+                    </div>
+                </div>
+            </div>
+
             {dietData.map((meal) => {
                 const totalCals = meal.items.reduce((acc, i) => acc + (parseInt(i.calories || '0') || 0), 0);
                 const totalP = meal.items.reduce((acc, i) => acc + (parseInt(i.protein || '0') || 0), 0);
@@ -92,10 +144,11 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange, fo
                 return (
                     <div key={meal.id} className="bg-white dark:bg-[#1C1C1E] rounded-3xl p-5 shadow-sm border border-gray-100 dark:border-white/5 relative group">
                         <div className="flex justify-between items-center mb-1">
-                            <input type="text" value={meal.name || ''} onChange={(e) => updateMeal(meal.id, 'name', e.target.value)} className="font-bold text-lg bg-transparent outline-none text-black dark:text-white placeholder-gray-400" placeholder="Meal Name" />
-                            <div className="flex items-center gap-2">
-                                <input type="text" value={meal.time || ''} onChange={(e) => updateMeal(meal.id, 'time', e.target.value)} className="text-xs font-medium bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-md outline-none w-20 text-center" placeholder="Time" />
-                                <button onClick={() => removeMeal(meal.id)} className="bg-red-50 text-red-500 p-1.5 rounded-full"><Trash2 size={12}/></button>
+                            <input type="text" value={meal.name || ''} onChange={(e) => updateMeal(meal.id, 'name', e.target.value)} className="font-bold text-lg bg-transparent outline-none text-black dark:text-white placeholder-gray-400 w-full mr-2" placeholder="Meal Name" />
+                            <div className="flex items-center gap-1">
+                                <input type="text" value={meal.time || ''} onChange={(e) => updateMeal(meal.id, 'time', e.target.value)} className="text-xs font-medium bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-md outline-none w-16 text-center" placeholder="Time" />
+                                <button onClick={() => duplicateMeal(meal.id)} className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition" title="Duplicate Meal"><Copy size={14}/></button>
+                                <button onClick={() => removeMeal(meal.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition"><Trash2 size={14}/></button>
                             </div>
                         </div>
                         <div className="text-[10px] text-gray-400 font-bold mb-3 flex gap-3 uppercase tracking-wider">
@@ -203,46 +256,48 @@ const PlanBuilder: React.FC<PlanBuilderProps> = ({ type, data = [], onChange, fo
                                         <input type="text" value={ex.name || ''} onChange={(e) => updateExercise(day.id, ex.id, 'name', e.target.value)} className="flex-1 bg-transparent text-sm font-bold outline-none border-b border-transparent focus:border-gray-300" placeholder="Exercise Name" />
                                         <button onClick={() => removeExercise(day.id, ex.id)} className="text-gray-400 hover:text-red-500 ml-2"><X size={14}/></button>
                                     </div>
-                                    <div className="grid grid-cols-4 gap-2 mb-2">
-                                        <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
-                                            <p className="text-[9px] text-gray-400 uppercase font-bold text-center">Sets</p>
-                                            <input type="text" value={ex.sets || ''} onChange={(e) => updateExercise(day.id, ex.id, 'sets', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="3" />
+                                    <div className="grid grid-cols-4 gap-2 mb-3">
+                                        <div className="bg-white dark:bg-white/5 rounded-xl p-2 border border-gray-100 dark:border-white/5">
+                                            <p className="text-[9px] text-gray-400 uppercase font-black text-center mb-1">Sets</p>
+                                            <input type="text" value={ex.sets || ''} onChange={(e) => updateExercise(day.id, ex.id, 'sets', e.target.value)} className="w-full bg-transparent text-center text-sm font-bold outline-none text-black dark:text-white" placeholder="3" />
                                         </div>
-                                        <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
-                                            <p className="text-[9px] text-gray-400 uppercase font-bold text-center">Reps</p>
-                                            <input type="text" value={ex.reps || ''} onChange={(e) => updateExercise(day.id, ex.id, 'reps', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="12" />
+                                        <div className="bg-white dark:bg-white/5 rounded-xl p-2 border border-gray-100 dark:border-white/5">
+                                            <p className="text-[9px] text-gray-400 uppercase font-black text-center mb-1">Reps</p>
+                                            <input type="text" value={ex.reps || ''} onChange={(e) => updateExercise(day.id, ex.id, 'reps', e.target.value)} className="w-full bg-transparent text-center text-sm font-bold outline-none text-black dark:text-white" placeholder="12" />
                                         </div>
-                                        <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
-                                            <p className="text-[9px] text-gray-400 uppercase font-bold text-center">Rest</p>
-                                            <input type="text" value={ex.rest || ''} onChange={(e) => updateExercise(day.id, ex.id, 'rest', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="60s" />
+                                        <div className="bg-white dark:bg-white/5 rounded-xl p-2 border border-gray-100 dark:border-white/5">
+                                            <p className="text-[9px] text-gray-400 uppercase font-black text-center mb-1">Rest</p>
+                                            <input type="text" value={ex.rest || ''} onChange={(e) => updateExercise(day.id, ex.id, 'rest', e.target.value)} className="w-full bg-transparent text-center text-sm font-bold outline-none text-black dark:text-white" placeholder="60s" />
                                         </div>
-                                        <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
-                                            <p className="text-[9px] text-gray-400 uppercase font-bold text-center">RPE</p>
-                                            <input type="text" value={ex.rpe || ''} onChange={(e) => updateExercise(day.id, ex.id, 'rpe', e.target.value)} className="w-full bg-transparent text-center text-xs font-bold outline-none" placeholder="8" />
+                                        <div className="bg-white dark:bg-white/5 rounded-xl p-2 border border-gray-100 dark:border-white/5">
+                                            <p className="text-[9px] text-gray-400 uppercase font-black text-center mb-1">RPE</p>
+                                            <input type="text" value={ex.rpe || ''} onChange={(e) => updateExercise(day.id, ex.id, 'rpe', e.target.value)} className="w-full bg-transparent text-center text-sm font-bold outline-none text-black dark:text-white" placeholder="8" />
                                         </div>
                                     </div>
 
                                     {/* Advanced Fields: Equipment, Difficulty, Video */}
-                                    <div className="grid grid-cols-3 gap-2 mb-2">
-                                         <div className="relative bg-white dark:bg-white/5 rounded-lg p-1.5 flex items-center">
-                                            <Dumbbell size={10} className="absolute left-2 text-gray-400"/>
-                                            <input type="text" value={ex.equipmentNeeded || ''} onChange={(e) => updateExercise(day.id, ex.id, 'equipmentNeeded', e.target.value)} className="w-full bg-transparent pl-4 text-[10px] outline-none" placeholder="Equipment" />
+                                    <div className="grid grid-cols-3 gap-2 mb-3">
+                                         <div className="relative bg-white dark:bg-white/5 rounded-xl p-2 flex items-center border border-gray-100 dark:border-white/5">
+                                            <Dumbbell size={12} className="absolute left-2.5 text-gray-400"/>
+                                            <input type="text" value={ex.equipmentNeeded || ''} onChange={(e) => updateExercise(day.id, ex.id, 'equipmentNeeded', e.target.value)} className="w-full bg-transparent pl-6 text-[10px] font-medium outline-none text-black dark:text-white" placeholder="Equipment" />
                                          </div>
-                                         <div className="relative bg-white dark:bg-white/5 rounded-lg p-1.5 flex items-center">
-                                            <Signal size={10} className="absolute left-2 text-gray-400"/>
-                                            <select value={ex.difficulty || 'intermediate'} onChange={(e) => updateExercise(day.id, ex.id, 'difficulty', e.target.value)} className="w-full bg-transparent pl-4 text-[10px] outline-none appearance-none">
+                                         <div className="relative bg-white dark:bg-white/5 rounded-xl p-2 flex items-center border border-gray-100 dark:border-white/5">
+                                            <Signal size={12} className="absolute left-2.5 text-gray-400"/>
+                                            <select value={ex.difficulty || 'intermediate'} onChange={(e) => updateExercise(day.id, ex.id, 'difficulty', e.target.value)} className="w-full bg-transparent pl-6 text-[10px] font-medium outline-none appearance-none text-black dark:text-white">
                                                 <option value="beginner">Beginner</option>
                                                 <option value="intermediate">Intermediate</option>
                                                 <option value="advanced">Advanced</option>
                                             </select>
                                          </div>
-                                         <div className="relative bg-white dark:bg-white/5 rounded-lg p-1.5 flex items-center">
-                                            <Video size={10} className="absolute left-2 text-gray-400"/>
-                                            <input type="text" value={ex.videoUrl || ''} onChange={(e) => updateExercise(day.id, ex.id, 'videoUrl', e.target.value)} className="w-full bg-transparent pl-4 text-[10px] outline-none" placeholder="Video URL" />
+                                         <div className="relative bg-white dark:bg-white/5 rounded-xl p-2 flex items-center border border-gray-100 dark:border-white/5">
+                                            <Video size={12} className="absolute left-2.5 text-gray-400"/>
+                                            <input type="text" value={ex.videoUrl || ''} onChange={(e) => updateExercise(day.id, ex.id, 'videoUrl', e.target.value)} className="w-full bg-transparent pl-6 text-[10px] font-medium outline-none text-black dark:text-white" placeholder="Video URL" />
                                          </div>
                                     </div>
 
-                                    <input type="text" value={ex.notes || ''} onChange={(e) => updateExercise(day.id, ex.id, 'notes', e.target.value)} className="w-full bg-transparent text-xs text-gray-500 outline-none italic" placeholder="Notes (e.g. slow tempo, dropset...)" />
+                                    <div className="relative">
+                                        <input type="text" value={ex.notes || ''} onChange={(e) => updateExercise(day.id, ex.id, 'notes', e.target.value)} className="w-full bg-white dark:bg-white/5 rounded-xl py-2 px-3 text-xs text-gray-600 dark:text-gray-300 outline-none border border-gray-100 dark:border-white/5 focus:border-blue-200 dark:focus:border-blue-900/50 transition-colors" placeholder="Add notes..." />
+                                    </div>
                             </div>
                         ))}
                         <button onClick={() => addExercise(day.id)} className="text-xs font-bold text-blue-500 flex items-center gap-1 mt-2"><Plus size={14}/> Add Exercise</button>

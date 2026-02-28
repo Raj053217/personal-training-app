@@ -6,6 +6,7 @@ export interface User {
     displayName: string;
     email: string;
     photoURL?: string;
+    clientCode?: string;
 }
 
 interface AuthContextType {
@@ -24,13 +25,8 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Always logged in as Coach for personal use by default
-  const [user, setUser] = useState<User | null>({ 
-      uid: 'local-coach', 
-      displayName: 'Coach', 
-      email: 'coach@local',
-      photoURL: '' 
-  });
+  // Default to null to force login selection
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -50,17 +46,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithCode = async (code: string) => {
       setLoading(true);
       setTimeout(() => {
-          if (code.length === 5) {
-              // Mock success for any 5 digit code
+          if (code === 'Raj8561098035') {
+              // Admin Login
+              setUser({ 
+                  uid: 'local-coach', 
+                  displayName: 'Coach Raj', 
+                  email: 'admin@fitwithrj.com',
+                  photoURL: '' 
+              });
+              setError(null);
+          } else if (code.length === 5) {
+              // Client Login Attempt
               setUser({
                   uid: 'client-user',
                   displayName: 'Client User',
                   email: 'client@local',
-                  photoURL: ''
+                  photoURL: '',
+                  clientCode: code
               });
               setError(null);
           } else {
-              setError("Invalid code");
+              setError("Invalid Access Code");
           }
           setLoading(false);
       }, 500);

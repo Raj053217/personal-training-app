@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Client, DietMeal, WorkoutDay } from '../types';
 import { format } from 'date-fns';
-import { X, Download, Loader2, Dumbbell, Utensils, Info, Printer, ExternalLink } from 'lucide-react';
+import { X, Download, Loader2, Dumbbell, Utensils, Info, Printer, ExternalLink, Instagram, Phone } from 'lucide-react';
 
 interface PlanPDFProps {
   client: Client;
@@ -56,11 +56,11 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
   };
 
   const PlanHeader = ({ title, icon: Icon }: { title: string, icon: any }) => (
-      <div className="flex items-center gap-3 border-b-2 border-gray-900 pb-2 mb-6 mt-8 first:mt-0 break-before-auto">
-          <div className="p-2 bg-gray-900 text-white rounded-lg">
-              <Icon size={24} />
+      <div className="flex items-center gap-4 border-b-4 border-black pb-4 mb-8 mt-10 first:mt-0 break-before-auto">
+          <div className="p-3 bg-black text-white rounded-xl shadow-lg">
+              <Icon size={28} strokeWidth={2.5} />
           </div>
-          <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">{title}</h2>
+          <h2 className="text-3xl font-black text-black uppercase tracking-tighter">{title}</h2>
       </div>
   );
 
@@ -74,44 +74,44 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
              const totalF = meal.items.reduce((acc, i) => acc + (parseInt(i.fats || '0') || 0), 0);
              
              return (
-                <div key={idx} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm break-inside-avoid bg-white">
-                    <div className="bg-gray-50/80 px-5 py-3 border-b border-gray-100 flex justify-between items-center">
+                <div key={idx} className="border-2 border-black rounded-2xl overflow-hidden shadow-sm break-inside-avoid bg-white mb-6 last:mb-0">
+                    <div className="bg-black text-white px-6 py-4 flex justify-between items-center">
                         <div>
-                             <h3 className="font-black text-gray-800 uppercase text-sm tracking-wide">{meal.name}</h3>
-                             {totalCals > 0 && <span className="text-[10px] text-gray-500 font-medium">Total: {totalCals} kcal (P:{totalP} C:{totalC} F:{totalF})</span>}
+                             <h3 className="font-black uppercase text-lg tracking-wide">{meal.name}</h3>
+                             {totalCals > 0 && <span className="text-[11px] text-gray-400 font-bold tracking-wider mt-1 block">Total: {totalCals} kcal • P:{totalP} C:{totalC} F:{totalF}</span>}
                         </div>
-                        <span className="text-xs font-bold text-gray-500 bg-white px-2 py-1 rounded-md border border-gray-100">{meal.time}</span>
+                        <span className="text-xs font-black bg-white text-black px-3 py-1.5 rounded-lg uppercase tracking-wider">{meal.time}</span>
                     </div>
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-white text-gray-400 text-[10px] uppercase font-bold border-b border-gray-100">
+                        <thead className="bg-gray-50 text-gray-500 text-[10px] uppercase font-black border-b-2 border-gray-100 tracking-wider">
                             <tr>
-                                <th className="px-5 py-2 w-1/3">Food</th>
-                                <th className="px-2 py-2">Portion</th>
-                                <th className="px-2 py-2 text-right">Cals</th>
-                                <th className="px-2 py-2 text-right">P</th>
-                                <th className="px-2 py-2 text-right">C</th>
-                                <th className="px-5 py-2 text-right">F</th>
+                                <th className="px-6 py-3 w-1/3">Food Item</th>
+                                <th className="px-4 py-3">Portion</th>
+                                <th className="px-4 py-3 text-right">Cals</th>
+                                <th className="px-4 py-3 text-right">P (g)</th>
+                                <th className="px-4 py-3 text-right">C (g)</th>
+                                <th className="px-6 py-3 text-right">F (g)</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-100">
                             {meal.items.map((item, i) => (
-                                <tr key={i} className="hover:bg-gray-50/50">
-                                    <td className="px-5 py-2.5 font-semibold text-gray-700">{item.food}</td>
-                                    <td className="px-2 py-2.5 text-gray-600 font-medium">{item.portion}</td>
-                                    <td className="px-2 py-2.5 text-right text-gray-600">{item.calories || '-'}</td>
-                                    <td className="px-2 py-2.5 text-right text-gray-400 text-xs">{item.protein || '-'}</td>
-                                    <td className="px-2 py-2.5 text-right text-gray-400 text-xs">{item.carbs || '-'}</td>
-                                    <td className="px-5 py-2.5 text-right text-gray-400 text-xs">{item.fats || '-'}</td>
+                                <tr key={i} className="hover:bg-gray-50/30 transition-colors">
+                                    <td className="px-6 py-4 font-bold text-gray-900">{item.food}</td>
+                                    <td className="px-4 py-4 text-gray-600 font-medium">{item.portion}</td>
+                                    <td className="px-4 py-4 text-right font-bold text-gray-900">{item.calories || '-'}</td>
+                                    <td className="px-4 py-4 text-right text-gray-500 font-medium">{item.protein || '-'}</td>
+                                    <td className="px-4 py-4 text-right text-gray-500 font-medium">{item.carbs || '-'}</td>
+                                    <td className="px-6 py-4 text-right text-gray-500 font-medium">{item.fats || '-'}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                     {meal.notes && (
-                        <div className="px-5 py-3 bg-gray-50/50 border-t border-gray-100 flex gap-2">
-                             <div className="mt-0.5 text-gray-400"><Info size={12}/></div>
+                        <div className="px-6 py-4 bg-gray-50 border-t-2 border-gray-100 flex gap-3">
+                             <div className="mt-1 text-black"><Info size={16}/></div>
                              <div className="flex-1">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Instructions</p>
-                                <p className="text-xs text-gray-600 italic whitespace-pre-wrap">{meal.notes}</p>
+                                <p className="text-[10px] font-black text-black uppercase mb-1 tracking-wider">Chef's Notes</p>
+                                <p className="text-sm text-gray-600 font-medium leading-relaxed">{meal.notes}</p>
                              </div>
                         </div>
                     )}
@@ -124,54 +124,54 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
   const renderWorkout = (days: WorkoutDay[]) => (
     <div className="space-y-8">
         {days.map((day, idx) => (
-            <div key={idx} className="break-inside-avoid">
-                <div className="flex items-center gap-3 mb-4">
-                     <div className="h-6 w-1 bg-blue-500 rounded-full"></div>
-                     <h3 className="font-black text-xl text-gray-900">{day.name}</h3>
+            <div key={idx} className="break-inside-avoid mb-8 last:mb-0">
+                <div className="flex items-center gap-4 mb-5 bg-black text-white p-4 rounded-2xl shadow-md">
+                     <div className="h-8 w-1.5 bg-white rounded-full"></div>
+                     <h3 className="font-black text-2xl uppercase tracking-tight">{day.name}</h3>
                 </div>
                 {day.notes && (
-                    <div className="mb-4 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200 flex gap-2">
-                        <div className="mt-0.5 text-gray-400"><Info size={14}/></div>
+                    <div className="mb-5 px-6 py-4 bg-gray-50 rounded-2xl border-l-4 border-black flex gap-3 shadow-sm">
+                        <div className="mt-0.5 text-black"><Info size={18}/></div>
                         <div className="flex-1">
-                           <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Day Notes</p>
-                           <p className="text-sm text-gray-700 italic whitespace-pre-wrap">{day.notes}</p>
+                           <p className="text-[10px] font-black text-black uppercase mb-1 tracking-wider">Coach's Focus</p>
+                           <p className="text-sm text-gray-700 font-medium leading-relaxed">{day.notes}</p>
                         </div>
                     </div>
                 )}
-                <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white">
+                <div className="border-2 border-black rounded-2xl overflow-hidden shadow-sm bg-white">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-bold border-b border-gray-100">
+                        <thead className="bg-gray-50 text-gray-500 text-[10px] uppercase font-black border-b-2 border-gray-100 tracking-wider">
                             <tr>
-                                <th className="px-4 py-3">Exercise</th>
-                                <th className="px-2 py-3 w-16 text-center">Sets</th>
-                                <th className="px-2 py-3 w-16 text-center">Reps</th>
-                                <th className="px-2 py-3 w-20 text-center">Rest</th>
-                                <th className="px-2 py-3 w-16 text-center">RPE</th>
-                                <th className="px-4 py-3 w-1/4">Notes</th>
+                                <th className="px-6 py-3">Exercise</th>
+                                <th className="px-4 py-3 w-20 text-center">Sets</th>
+                                <th className="px-4 py-3 w-20 text-center">Reps</th>
+                                <th className="px-4 py-3 w-24 text-center">Rest</th>
+                                <th className="px-4 py-3 w-20 text-center">RPE</th>
+                                <th className="px-6 py-3 w-1/3">Notes</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {day.exercises.map((ex, i) => (
-                                <tr key={i} className="even:bg-gray-50/30">
-                                    <td className="px-4 py-3">
-                                        <p className="font-bold text-gray-800">{ex.name}</p>
+                                <tr key={i} className="hover:bg-gray-50/30 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <p className="font-black text-gray-900 text-base">{ex.name}</p>
                                         {(ex.equipmentNeeded || ex.difficulty) && (
-                                            <div className="flex flex-wrap gap-2 mt-1">
-                                                {ex.equipmentNeeded && <span className="text-[9px] text-gray-500 bg-gray-100 px-1.5 rounded border border-gray-200">{ex.equipmentNeeded}</span>}
-                                                {ex.difficulty && <span className={`text-[9px] px-1.5 rounded border ${ex.difficulty === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : ex.difficulty === 'intermediate' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' : 'bg-green-50 text-green-600 border-green-100'} uppercase`}>{ex.difficulty.substring(0,3)}</span>}
+                                            <div className="flex flex-wrap gap-2 mt-1.5">
+                                                {ex.equipmentNeeded && <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded uppercase tracking-wide">{ex.equipmentNeeded}</span>}
+                                                {ex.difficulty && <span className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wide ${ex.difficulty === 'advanced' ? 'bg-red-50 text-red-600' : ex.difficulty === 'intermediate' ? 'bg-yellow-50 text-yellow-600' : 'bg-green-50 text-green-600'}`}>{ex.difficulty}</span>}
                                             </div>
                                         )}
                                         {ex.videoUrl && (
-                                            <a href={ex.videoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-1 text-[10px] text-blue-500 hover:underline">
-                                                <ExternalLink size={8} /> Video
+                                            <a href={ex.videoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-blue-600 uppercase tracking-wide hover:underline">
+                                                <ExternalLink size={10} /> Watch Demo
                                             </a>
                                         )}
                                     </td>
-                                    <td className="px-2 py-3 text-center font-bold text-blue-600">{ex.sets}</td>
-                                    <td className="px-2 py-3 text-center font-bold text-gray-600">{ex.reps}</td>
-                                    <td className="px-2 py-3 text-center text-xs text-gray-500">{ex.rest || '-'}</td>
-                                    <td className="px-2 py-3 text-center text-xs text-gray-500">{ex.rpe || '-'}</td>
-                                    <td className="px-4 py-3 text-gray-500 text-xs italic">{ex.notes}</td>
+                                    <td className="px-4 py-4 text-center font-black text-xl text-black">{ex.sets}</td>
+                                    <td className="px-4 py-4 text-center font-bold text-gray-700">{ex.reps}</td>
+                                    <td className="px-4 py-4 text-center text-xs font-bold text-gray-500">{ex.rest || '-'}</td>
+                                    <td className="px-4 py-4 text-center text-xs font-bold text-gray-500">{ex.rpe || '-'}</td>
+                                    <td className="px-6 py-4 text-gray-500 text-xs font-medium leading-relaxed">{ex.notes}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -211,18 +211,21 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
             <div id="printable-plan-area" className="bg-white shadow-xl mx-auto max-w-[800px] min-h-[1000px] p-8 sm:p-12 relative rounded-sm">
                 
                 {/* PDF Header */}
-                <div className="flex justify-between items-start mb-10 pb-8 border-b-4 border-gray-900">
+                <div className="flex justify-between items-start mb-12 pb-8 border-b-4 border-black">
                     <div>
-                        <h1 className="text-4xl sm:text-5xl font-black text-gray-900 uppercase tracking-tighter mb-1">FitwithRj</h1>
-                        <p className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Personal Training Excellence</p>
+                        <h1 className="text-5xl sm:text-6xl font-black text-black uppercase tracking-tighter mb-2">FitWithRj</h1>
+                        <div className="flex items-center gap-2">
+                            <div className="h-1 w-8 bg-black"></div>
+                            <p className="text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-[0.3em]">Premium Coaching</p>
+                        </div>
                     </div>
                     <div className="text-right">
-                        <h2 className="text-2xl sm:text-3xl font-black text-gray-800 uppercase tracking-tight">{client.name}</h2>
-                        <div className="flex flex-col items-end mt-2">
-                            <span className="text-[10px] font-black text-white bg-black px-3 py-1 rounded uppercase tracking-widest">
-                                {type === 'full' ? 'Complete Transformation Program' : type === 'diet' ? 'Optimized Nutrition Plan' : 'Dynamic Training Routine'}
+                        <h2 className="text-3xl sm:text-4xl font-black text-gray-900 uppercase tracking-tight mb-2">{client.name}</h2>
+                        <div className="flex flex-col items-end gap-1">
+                            <span className="text-[10px] font-black text-white bg-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-md">
+                                {type === 'full' ? 'Transformation Program' : type === 'diet' ? 'Nutrition Protocol' : 'Training Program'}
                             </span>
-                            <span className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Cycle Date: {format(new Date(), 'MMMM dd, yyyy')}</span>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Generated: {format(new Date(), 'MMM dd, yyyy')}</span>
                         </div>
                     </div>
                 </div>
@@ -249,12 +252,21 @@ const PlanPDF: React.FC<PlanPDFProps> = ({ client, type, dietData, workoutData, 
                 </div>
 
                 {/* PDF Footer */}
-                <div className="mt-20 pt-8 border-t border-gray-100 flex justify-between items-end text-gray-400">
-                     <div className="text-[10px] font-bold uppercase tracking-widest">
-                         <p>FitwithRj • Digital Coaching Platform</p>
-                         <p className="mt-1">Powered by PT Manage Pro</p>
+                <div className="mt-20 pt-8 border-t-2 border-black flex justify-between items-end">
+                     <div className="flex flex-col gap-2">
+                         <div className="flex items-center gap-2 text-black">
+                             <Instagram size={20} strokeWidth={2.5} />
+                             <span className="font-black text-sm tracking-wide">fitwithrj</span>
+                         </div>
+                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Powered by FitWithRj</p>
                      </div>
-                     <p className="font-black italic text-gray-900 text-lg tracking-tighter">"Results are earned."</p>
+                     <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-2 text-black">
+                             <span className="font-black text-sm tracking-wide">8561098035</span>
+                             <Phone size={20} strokeWidth={2.5} className="text-green-600" />
+                         </div>
+                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Created by Coach Raj</p>
+                     </div>
                 </div>
             </div>
         </div>

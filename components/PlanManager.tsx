@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Client, PlanTemplate, DietMeal, WorkoutDay, FoodItem } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { Search, Plus, Trash2, FileText, Download, ChevronRight, Save, ArrowLeft, Copy, Printer, Eye, X, Utensils, Book, Filter, Dumbbell } from 'lucide-react';
+import { Search, Plus, Trash2, FileText, Download, ChevronRight, Save, ArrowLeft, Copy, Printer, Eye, X, Utensils, Book, Filter, Dumbbell, Check, Info, ShoppingBag } from 'lucide-react';
 import PlanBuilder from './PlanBuilder';
 import PlanPDF from './PlanPDF';
 import { saveTemplates, loadTemplates, saveFoodLibrary, loadFoodLibrary } from '../services/storage';
@@ -21,6 +21,28 @@ const ClientPlanView = ({ client }: { client: Client }) => {
   const diet = (client.dietPlan as DietMeal[]) || [];
   const workout = (client.workoutRoutine as WorkoutDay[]) || [];
   const [showPdf, setShowPdf] = useState(false);
+  const [showShoppingList, setShowShoppingList] = useState(false);
+
+  // Local state for tracking completion (in a real app, this would persist)
+  const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
+
+  const toggleComplete = (id: string) => {
+      setCompletedItems(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Generate Shopping List
+  const shoppingList = React.useMemo(() => {
+      const items: Record<string, string[]> = {};
+      diet.forEach(meal => {
+          meal.items.forEach(item => {
+              const name = item.food.trim();
+              if (!name) return;
+              if (!items[name]) items[name] = [];
+              if (item.portion) items[name].push(item.portion);
+          });
+      });
+      return Object.entries(items).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [diet]);
 
   // Calculate Macros
   const macros = diet.reduce((acc, meal) => {
@@ -33,123 +55,212 @@ const ClientPlanView = ({ client }: { client: Client }) => {
      return acc;
   }, { cals: 0, prot: 0, carbs: 0, fats: 0 });
 
+  // Calculate Progress
+  const totalItems = tab === 'diet' ? diet.length : workout.reduce((acc, day) => acc + day.exercises.length, 0);
+  const completedCount = tab === 'diet' 
+      ? diet.filter((_, i) => completedItems[`meal-${i}`]).length 
+      : workout.reduce((acc, day, i) => acc + day.exercises.filter((_, j) => completedItems[`ex-${i}-${j}`]).length, 0);
+  
+  const progress = totalItems > 0 ? (completedCount / totalItems) * 100 : 0;
+
   return (
-     <div className="space-y-6 pb-24">
-        {/* Toggle & PDF Action */}
-        <div className="flex items-center gap-3">
-            <div className="bg-gray-200 dark:bg-gray-800 p-1 rounded-2xl flex flex-1">
-                <button onClick={() => setTab('diet')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${tab === 'diet' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>
-                    <Utensils size={16}/> Nutrition
+     <div className="space-y-8 pb-32">
+        {/* Header & Tabs */}
+        <div className="sticky top-0 z-20 bg-[#F2F2F7]/95 dark:bg-black/95 backdrop-blur-md py-2 -mx-4 px-4 border-b border-gray-200 dark:border-white/5">
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h2 className="text-2xl font-black text-black dark:text-white tracking-tight">Your Plan</h2>
+                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">
+                        {tab === 'diet' ? 'Nutrition & Macros' : 'Training Schedule'}
+                    </p>
+                </div>
+                <div className="flex gap-2">
+                    {tab === 'diet' && (
+                        <button onClick={() => setShowShoppingList(true)} className="w-10 h-10 flex items-center justify-center bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-full border border-green-100 dark:border-green-900/30 active:scale-95 transition shadow-sm">
+                            <ShoppingBag size={18} />
+                        </button>
+                    )}
+                    <button onClick={() => setShowPdf(true)} className="w-10 h-10 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full border border-blue-100 dark:border-blue-900/30 active:scale-95 transition shadow-sm">
+                        <Printer size={18} />
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex p-1 bg-gray-200 dark:bg-gray-800 rounded-2xl">
+                <button onClick={() => setTab('diet')} className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${tab === 'diet' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                    <Utensils size={14} className={tab === 'diet' ? 'text-green-500' : ''}/> Nutrition
                 </button>
-                <button onClick={() => setTab('workout')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${tab === 'workout' ? 'bg-white dark:bg-[#2C2C2E] shadow text-black dark:text-white' : 'text-gray-500'}`}>
-                    <Dumbbell size={16}/> Training
+                <button onClick={() => setTab('workout')} className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${tab === 'workout' ? 'bg-white dark:bg-[#2C2C2E] shadow-sm text-black dark:text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                    <Dumbbell size={14} className={tab === 'workout' ? 'text-blue-500' : ''}/> Training
                 </button>
             </div>
-            <button onClick={() => setShowPdf(true)} className="w-12 h-12 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-2xl border border-blue-100 dark:border-blue-900/30 active:scale-95 transition">
-                <Printer size={20} />
-            </button>
+            
+            {/* Progress Bar */}
+            <div className="mt-4 flex items-center gap-3">
+                <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div 
+                        className={`h-full rounded-full transition-all duration-500 ${tab === 'diet' ? 'bg-green-500' : 'bg-blue-500'}`} 
+                        style={{ width: `${progress}%` }}
+                    />
+                </div>
+                <span className="text-[10px] font-black text-gray-400 tabular-nums">{Math.round(progress)}% Done</span>
+            </div>
         </div>
 
         {tab === 'diet' ? (
-            <div className="space-y-4 animate-slideUp">
+            <div className="space-y-6 animate-slideUp">
                  {/* Macro Summary Card */}
                  {diet.length > 0 && (
-                     <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-[24px] p-5 text-white shadow-lg">
-                         <h3 className="font-bold opacity-90 uppercase tracking-wider text-xs mb-4 flex items-center gap-2"><Utensils size={14}/> Daily Targets</h3>
-                         <div className="grid grid-cols-4 gap-2 text-center">
+                     <div className="bg-white dark:bg-[#1C1C1E] rounded-[32px] p-6 shadow-sm border border-gray-100 dark:border-white/5 relative overflow-hidden group">
+                         <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl -mr-16 -mt-16 transition-all group-hover:bg-green-500/20"></div>
+                         
+                         <div className="flex justify-between items-start mb-6 relative">
                              <div>
-                                 <p className="text-2xl font-black">{macros.cals}</p>
-                                 <p className="text-[10px] font-bold opacity-70 uppercase">Kcal</p>
+                                 <h3 className="font-black text-lg text-black dark:text-white">Daily Targets</h3>
+                                 <p className="text-xs text-gray-400 font-medium">Macro goals for today</p>
                              </div>
-                             <div>
-                                 <p className="text-xl font-bold">{macros.prot}g</p>
-                                 <p className="text-[10px] font-bold opacity-70 uppercase">Prot</p>
+                             <div className="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 p-2 rounded-xl">
+                                 <Utensils size={20} />
                              </div>
-                             <div>
-                                 <p className="text-xl font-bold">{macros.carbs}g</p>
-                                 <p className="text-[10px] font-bold opacity-70 uppercase">Carb</p>
+                         </div>
+
+                         <div className="grid grid-cols-4 gap-4">
+                             <div className="text-center p-3 bg-gray-50 dark:bg-white/5 rounded-2xl">
+                                 <p className="text-xl font-black text-black dark:text-white">{macros.cals}</p>
+                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Kcal</p>
                              </div>
-                             <div>
-                                 <p className="text-xl font-bold">{macros.fats}g</p>
-                                 <p className="text-[10px] font-bold opacity-70 uppercase">Fat</p>
+                             <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/10 rounded-2xl">
+                                 <p className="text-lg font-black text-blue-600 dark:text-blue-400">{macros.prot}g</p>
+                                 <p className="text-[9px] font-bold text-blue-400/70 uppercase tracking-wider">Prot</p>
+                             </div>
+                             <div className="text-center p-3 bg-orange-50 dark:bg-orange-900/10 rounded-2xl">
+                                 <p className="text-lg font-black text-orange-600 dark:text-orange-400">{macros.carbs}g</p>
+                                 <p className="text-[9px] font-bold text-orange-400/70 uppercase tracking-wider">Carb</p>
+                             </div>
+                             <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-900/10 rounded-2xl">
+                                 <p className="text-lg font-black text-yellow-600 dark:text-yellow-400">{macros.fats}g</p>
+                                 <p className="text-[9px] font-bold text-yellow-400/70 uppercase tracking-wider">Fat</p>
                              </div>
                          </div>
                      </div>
                  )}
 
-                 {diet.map((meal, i) => (
-                     <div key={i} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/5">
-                         <div className="flex justify-between items-center mb-4">
-                             <h3 className="font-black text-lg text-black dark:text-white">{meal.name}</h3>
-                             <span className="text-xs font-bold text-gray-500 bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-lg">{meal.time}</span>
-                         </div>
-                         <div className="space-y-3">
-                             {meal.items.map((item, j) => (
-                                 <div key={j} className="flex justify-between items-start border-b border-gray-50 dark:border-white/5 pb-2 last:border-0">
-                                     <div>
-                                         <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">{item.food}</p>
-                                         <p className="text-[10px] text-gray-500 mt-0.5">{item.calories} kcal • P:{item.protein} C:{item.carbs} F:{item.fats}</p>
-                                     </div>
-                                     <p className="font-bold text-gray-500 text-sm">{item.portion}</p>
-                                 </div>
-                             ))}
-                         </div>
-                         {meal.notes && (
-                            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl text-xs text-blue-700 dark:text-blue-300 leading-relaxed border border-blue-100 dark:border-blue-900/20">
-                                <strong>Note:</strong> {meal.notes}
+                 <div className="space-y-4">
+                    {diet.map((meal, i) => {
+                        const isDone = completedItems[`meal-${i}`];
+                        return (
+                            <div key={i} onClick={() => toggleComplete(`meal-${i}`)} className={`relative overflow-hidden p-5 rounded-[28px] transition-all cursor-pointer border ${isDone ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30 opacity-60' : 'bg-white dark:bg-[#1C1C1E] shadow-sm border-gray-100 dark:border-white/5 hover:shadow-md'}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isDone ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                                            {isDone && <Check size={14} className="text-white" strokeWidth={4} />}
+                                        </div>
+                                        <div>
+                                            <h3 className={`font-black text-lg ${isDone ? 'text-gray-500 line-through' : 'text-black dark:text-white'}`}>{meal.name}</h3>
+                                            <span className="text-xs font-bold text-gray-400">{meal.time}</span>
+                                        </div>
+                                    </div>
+                                    {meal.notes && <div className="w-2 h-2 rounded-full bg-blue-500"></div>}
+                                </div>
+                                
+                                <div className={`space-y-3 pl-10 ${isDone ? 'opacity-50' : ''}`}>
+                                    {meal.items.map((item, j) => (
+                                        <div key={j} className="flex justify-between items-center py-2 border-b border-gray-50 dark:border-white/5 last:border-0">
+                                            <div>
+                                                <p className="font-bold text-gray-800 dark:text-gray-200 text-sm">{item.food}</p>
+                                                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{item.calories} kcal • P:{item.protein} C:{item.carbs} F:{item.fats}</p>
+                                            </div>
+                                            <p className="font-bold text-gray-500 text-xs bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-lg">{item.portion}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                
+                                {meal.notes && (
+                                   <div className="mt-4 ml-10 p-3 bg-blue-50 dark:bg-blue-900/10 rounded-xl text-xs text-blue-700 dark:text-blue-300 leading-relaxed border border-blue-100 dark:border-blue-900/20 flex gap-2">
+                                       <Info size={14} className="shrink-0 mt-0.5"/>
+                                       <span>{meal.notes}</span>
+                                   </div>
+                                )}
                             </div>
-                         )}
-                     </div>
-                 ))}
-                 {diet.length === 0 && <div className="text-center py-10 text-gray-400 italic">No nutrition plan assigned yet.</div>}
+                        );
+                    })}
+                 </div>
+                 {diet.length === 0 && (
+                    <div className="text-center py-12">
+                        <div className="w-20 h-20 bg-gray-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                            <Utensils size={32} />
+                        </div>
+                        <p className="text-gray-400 font-medium">No nutrition plan assigned yet.</p>
+                    </div>
+                 )}
             </div>
         ) : (
-            <div className="space-y-4 animate-slideUp">
+            <div className="space-y-6 animate-slideUp">
                 {workout.map((day, i) => (
-                    <div key={i} className="bg-white dark:bg-[#1C1C1E] p-5 rounded-[24px] shadow-sm border border-gray-100 dark:border-white/5">
-                         <h3 className="font-black text-xl text-black dark:text-white mb-2 flex items-center gap-2">
-                            <span className="w-1.5 h-6 bg-blue-500 rounded-full"></span>
-                            {day.name}
-                         </h3>
-                         {day.notes && <p className="text-xs text-gray-500 mb-4 italic pl-3 border-l-2 border-gray-200 dark:border-white/10">{day.notes}</p>}
+                    <div key={i} className="bg-white dark:bg-[#1C1C1E] rounded-[32px] overflow-hidden shadow-sm border border-gray-100 dark:border-white/5">
+                         <div className="p-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
+                             <h3 className="font-black text-xl flex items-center gap-2">
+                                {day.name}
+                             </h3>
+                             {day.notes && <p className="text-xs text-blue-100 mt-2 opacity-90 leading-relaxed">{day.notes}</p>}
+                         </div>
                          
-                         <div className="space-y-3">
-                             {day.exercises.map((ex, j) => (
-                                 <div key={j} className="bg-gray-50 dark:bg-black/20 p-4 rounded-2xl">
-                                     <div className="flex justify-between items-start mb-2">
-                                         <h4 className="font-bold text-black dark:text-white">{ex.name}</h4>
-                                         {ex.videoUrl && <a href={ex.videoUrl} target="_blank" className="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1 hover:underline"><Eye size={10}/> Video</a>}
+                         <div className="p-2">
+                             {day.exercises.map((ex, j) => {
+                                 const isExDone = completedItems[`ex-${i}-${j}`];
+                                 return (
+                                     <div key={j} onClick={() => toggleComplete(`ex-${i}-${j}`)} className={`p-4 rounded-2xl mb-2 last:mb-0 transition-all cursor-pointer group ${isExDone ? 'bg-gray-50 dark:bg-white/5 opacity-60' : 'hover:bg-gray-50 dark:hover:bg-white/5'}`}>
+                                         <div className="flex items-start gap-4">
+                                             <div className={`mt-1 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors shrink-0 ${isExDone ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-gray-600 group-hover:border-blue-400'}`}>
+                                                 {isExDone && <Check size={12} className="text-white" strokeWidth={4} />}
+                                             </div>
+                                             <div className="flex-1">
+                                                 <div className="flex justify-between items-start mb-2">
+                                                     <h4 className={`font-bold text-sm ${isExDone ? 'text-gray-500 line-through' : 'text-black dark:text-white'}`}>{ex.name}</h4>
+                                                     {ex.videoUrl && <a href={ex.videoUrl} onClick={e => e.stopPropagation()} target="_blank" className="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1 hover:underline bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full"><Eye size={10}/> Watch</a>}
+                                                 </div>
+                                                 
+                                                 <div className={`grid grid-cols-4 gap-2 text-center ${isExDone ? 'opacity-50' : ''}`}>
+                                                     <div className="bg-gray-100 dark:bg-black/20 rounded-lg p-1.5">
+                                                         <p className="text-[8px] text-gray-400 uppercase font-black">Sets</p>
+                                                         <p className="font-bold text-xs text-black dark:text-white">{ex.sets}</p>
+                                                     </div>
+                                                     <div className="bg-gray-100 dark:bg-black/20 rounded-lg p-1.5">
+                                                         <p className="text-[8px] text-gray-400 uppercase font-black">Reps</p>
+                                                         <p className="font-bold text-xs text-black dark:text-white">{ex.reps}</p>
+                                                     </div>
+                                                     <div className="bg-gray-100 dark:bg-black/20 rounded-lg p-1.5">
+                                                         <p className="text-[8px] text-gray-400 uppercase font-black">Rest</p>
+                                                         <p className="font-bold text-xs text-black dark:text-white">{ex.rest || '-'}</p>
+                                                     </div>
+                                                     <div className="bg-gray-100 dark:bg-black/20 rounded-lg p-1.5">
+                                                         <p className="text-[8px] text-gray-400 uppercase font-black">RPE</p>
+                                                         <p className="font-bold text-xs text-black dark:text-white">{ex.rpe || '-'}</p>
+                                                     </div>
+                                                 </div>
+                                                 
+                                                 {(ex.notes || ex.equipmentNeeded) && (
+                                                     <div className="flex flex-wrap gap-2 mt-3">
+                                                         {ex.equipmentNeeded && <span className="text-[9px] bg-white dark:bg-white/10 px-2 py-0.5 rounded border border-gray-100 dark:border-white/5 text-gray-500 font-medium">{ex.equipmentNeeded}</span>}
+                                                         {ex.notes && <p className="text-[10px] text-gray-400 italic flex-1 border-l-2 border-gray-200 dark:border-gray-700 pl-2">{ex.notes}</p>}
+                                                     </div>
+                                                 )}
+                                             </div>
+                                         </div>
                                      </div>
-                                     <div className="grid grid-cols-4 gap-2 text-center mb-2">
-                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
-                                             <p className="text-[8px] text-gray-400 uppercase font-black">Sets</p>
-                                             <p className="font-bold text-black dark:text-white">{ex.sets}</p>
-                                         </div>
-                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
-                                             <p className="text-[8px] text-gray-400 uppercase font-black">Reps</p>
-                                             <p className="font-bold text-black dark:text-white">{ex.reps}</p>
-                                         </div>
-                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
-                                             <p className="text-[8px] text-gray-400 uppercase font-black">Rest</p>
-                                             <p className="font-bold text-black dark:text-white">{ex.rest || '-'}</p>
-                                         </div>
-                                         <div className="bg-white dark:bg-white/5 rounded-lg p-1.5">
-                                             <p className="text-[8px] text-gray-400 uppercase font-black">RPE</p>
-                                             <p className="font-bold text-black dark:text-white">{ex.rpe || '-'}</p>
-                                         </div>
-                                     </div>
-                                     {(ex.notes || ex.equipmentNeeded) && (
-                                         <div className="flex flex-wrap gap-2 mt-2">
-                                             {ex.equipmentNeeded && <span className="text-[9px] bg-white dark:bg-white/5 px-2 py-0.5 rounded border border-gray-100 dark:border-white/10 text-gray-500">{ex.equipmentNeeded}</span>}
-                                             {ex.notes && <p className="text-[10px] text-gray-500 italic flex-1">{ex.notes}</p>}
-                                         </div>
-                                     )}
-                                 </div>
-                             ))}
+                                 );
+                             })}
                          </div>
                     </div>
                 ))}
-                {workout.length === 0 && <div className="text-center py-10 text-gray-400 italic">No training program assigned yet.</div>}
+                {workout.length === 0 && (
+                    <div className="text-center py-12">
+                        <div className="w-20 h-20 bg-gray-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                            <Dumbbell size={32} />
+                        </div>
+                        <p className="text-gray-400 font-medium">No training program assigned yet.</p>
+                    </div>
+                )}
             </div>
         )}
 
@@ -166,6 +277,42 @@ const ClientPlanView = ({ client }: { client: Client }) => {
                     onClose={() => setShowPdf(false)} 
                   />
               </div>
+            </div>
+        )}
+        {/* Shopping List Modal */}
+        {showShoppingList && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-fadeIn">
+                <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-[40px] w-full max-w-sm shadow-2xl relative animate-slideUp max-h-[80vh] flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 className="text-2xl font-black text-black dark:text-white uppercase tracking-tight">Shopping List</h3>
+                            <p className="text-xs text-gray-400 font-bold">Consolidated ingredients</p>
+                        </div>
+                        <button onClick={() => setShowShoppingList(false)} className="p-2 bg-gray-100 dark:bg-white/5 rounded-full hover:bg-red-50 hover:text-red-500 transition"><X size={20}/></button>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+                        {shoppingList.length > 0 ? shoppingList.map(([name, portions], idx) => (
+                            <div key={idx} className="flex justify-between items-start p-3 bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5"></div>
+                                    <span className="font-bold text-black dark:text-white capitalize">{name}</span>
+                                </div>
+                                <div className="text-right">
+                                    {portions.map((p, i) => (
+                                        <span key={i} className="block text-[10px] text-gray-500 font-medium bg-white dark:bg-black/20 px-1.5 py-0.5 rounded mb-1 last:mb-0 border border-gray-100 dark:border-white/5">{p}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="text-center py-10 text-gray-400">No items found in diet plan.</div>
+                        )}
+                    </div>
+                    
+                    <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/5">
+                        <button onClick={() => setShowShoppingList(false)} className="w-full py-3 bg-black dark:bg-white text-white dark:text-black rounded-2xl font-bold shadow-lg active:scale-95 transition">Done</button>
+                    </div>
+                </div>
             </div>
         )}
      </div>
@@ -201,6 +348,8 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
 
   // Search
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [templateSearch, setTemplateSearch] = useState('');
 
   useEffect(() => {
     setTemplates(loadTemplates());
@@ -293,6 +442,19 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
       e.stopPropagation();
       if(!window.confirm("Delete template?")) return;
       const updated = templates.filter(t => t.id !== id);
+      setTemplates(updated);
+      saveTemplates(updated);
+  };
+
+  const handleDuplicateTemplate = (t: PlanTemplate, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const newTemplate: PlanTemplate = {
+          ...t,
+          id: uuidv4(),
+          name: `${t.name} (Copy)`,
+          createdAt: new Date().toISOString()
+      };
+      const updated = [...templates, newTemplate];
       setTemplates(updated);
       saveTemplates(updated);
   };
@@ -480,7 +642,7 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
                  <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search foods..." className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
             </div>
 
-            <div className="grid gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                {foodLibrary
                  .filter(f => (filterCategory === 'All' || f.category === filterCategory) && f.name.toLowerCase().includes(searchTerm.toLowerCase()))
                  .map(food => (
@@ -552,8 +714,15 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
                    <button onClick={() => setTemplateType('workout')} className={`px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${templateType === 'workout' ? 'bg-black dark:bg-white text-white dark:text-black shadow-md' : 'bg-gray-200 dark:bg-gray-800 text-gray-400'}`}>Training</button>
               </div>
 
-              <div className="grid gap-3">
-                  {templates.filter(t => t.type === templateType).map(t => (
+              <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input type="text" value={templateSearch} onChange={e => setTemplateSearch(e.target.value)} placeholder={`Search ${templateType} templates...`} className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {templates
+                    .filter(t => t.type === templateType && t.name.toLowerCase().includes(templateSearch.toLowerCase()))
+                    .map(t => (
                       <div key={t.id} className="bg-white dark:bg-[#1C1C1E] p-4 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 flex justify-between items-center group cursor-pointer active:scale-[0.98] transition" onClick={() => startEditTemplate(t)}>
                           <div className="flex items-center gap-4">
                               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${t.type === 'diet' ? 'bg-green-100 text-green-600 dark:bg-green-900/20' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/20'}`}>
@@ -565,6 +734,9 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
                               </div>
                           </div>
                           <div className="flex items-center gap-2">
+                              <button onClick={(e) => handleDuplicateTemplate(t, e)} className="p-2.5 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition" title="Duplicate">
+                                  <Copy size={18}/>
+                              </button>
                               <button onClick={(e) => { e.stopPropagation(); setPdfNameInput(''); setShowPdf({ type: t.type, clientName: '', data: t.data }); }} className="p-2.5 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition">
                                   <Printer size={18}/>
                               </button>
@@ -583,8 +755,8 @@ const PlanManager: React.FC<PlanManagerProps> = ({ clients, onUpdateClient, view
       )}
 
       {activeTab === 'clients' && (
-          <div className="space-y-4">
-              <div className="relative mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="relative mb-6 col-span-full">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search client plans..." className="w-full bg-white dark:bg-[#1C1C1E] pl-12 pr-4 py-4 rounded-3xl outline-none shadow-sm border border-gray-100 dark:border-white/5" />
               </div>

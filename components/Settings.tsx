@@ -1,7 +1,8 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Moon, Sun, DollarSign, ChevronRight, Smartphone, HardDrive, Bell } from 'lucide-react';
+import { Moon, Sun, DollarSign, ChevronRight, Smartphone, HardDrive, Bell, Monitor, LogOut } from 'lucide-react';
 import { Client } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 import { loadTemplates, loadFoodLibrary, saveTemplates, saveFoodLibrary } from '../services/storage';
 
 interface SettingsProps {
@@ -10,6 +11,8 @@ interface SettingsProps {
   toggleTheme: () => void;
   currency: string;
   setCurrency: (currency: string) => void;
+  layoutMode: 'mobile' | 'desktop';
+  setLayoutMode: (mode: 'mobile' | 'desktop') => void;
   onRestore: (data: Client[]) => void;
   undo: () => void;
   redo: () => void;
@@ -18,7 +21,8 @@ interface SettingsProps {
   onEnterClientMode?: (client: Client) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleTheme, currency, setCurrency, onRestore }) => {
+const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleTheme, currency, setCurrency, layoutMode, setLayoutMode, onRestore }) => {
+  const { logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   
@@ -183,6 +187,14 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
             onClick={() => setCurrency(currency === '₹' ? '$' : '₹')}
             iconColor="bg-ios-green"
           />
+           <SettingItem 
+            icon={Monitor} 
+            label="Desktop View" 
+            isToggle={true}
+            toggleValue={layoutMode === 'desktop'}
+            onClick={() => setLayoutMode(layoutMode === 'desktop' ? 'mobile' : 'desktop')}
+            iconColor="bg-purple-500"
+          />
         </div>
       </div>
 
@@ -217,6 +229,13 @@ const Settings: React.FC<SettingsProps> = ({ clients = [], isDarkMode, toggleThe
             value="3.0.0 (Personal)"
             onClick={() => {}}
             iconColor="bg-gray-500"
+          />
+          <SettingItem 
+            icon={LogOut} 
+            label="Log Out" 
+            value=""
+            onClick={logout}
+            iconColor="bg-red-500"
           />
         </div>
       </div>

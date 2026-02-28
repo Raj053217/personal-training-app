@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Client } from '../types';
-import { Search, Download, Trash2, ChevronRight, Plus, RefreshCcw, AlertTriangle, CheckCircle2, Info, MoreHorizontal } from 'lucide-react';
+import { Search, Download, Trash2, ChevronRight, Plus, RefreshCcw, AlertTriangle, CheckCircle2, Info, MoreHorizontal, Calendar } from 'lucide-react';
 import Invoice from './Invoice';
 import { isBefore, differenceInDays, parseISO, isAfter, isSameDay } from 'date-fns';
 
@@ -13,7 +13,7 @@ interface ClientListProps {
   currency: string;
 }
 
-type ClientStatus = 'Expired' | 'Expiring Soon' | 'Needs Follow-up' | 'Active';
+type ClientStatus = 'Expired' | 'Expiring Soon' | 'Needs Follow-up' | 'Active' | string;
 
 const ClientList: React.FC<ClientListProps> = ({ clients, onEdit, onDelete, onAdd, currency }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,12 +48,24 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onEdit, onDelete, onAd
     const missedSessions = client.sessions.some(s => s.status === 'missed');
     const futureSessions = client.sessions.some(s => {
       const sDate = parseISO(s.date);
-      return (isAfter(sDate, today) || isSameDay(sDate, today)) && s.status !== 'cancelled' && s.status !== 'completed';
+      return (isAfter(sDate, today) || isSameDay(sDate, today)) && s.status !== 'cancelled' && s.status !== 'completed' && s.status !== 'missed';
     });
 
     if (isExpired) return { status: 'Expired', color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20', icon: RefreshCcw };
-    if (daysUntilExpiry <= 7) return { status: 'Expiring Soon', color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', icon: AlertTriangle };
-    if (missedSessions || (!futureSessions && !isExpired)) return { status: 'Needs Follow-up', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', icon: Info };
+    
+    if (daysUntilExpiry <= 7) {
+        const dayText = daysUntilExpiry === 1 ? 'day' : 'days';
+        return { status: `Expiring in ${daysUntilExpiry} ${dayText}`, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20', icon: AlertTriangle };
+    }
+
+    if (futureSessions) {
+        return { status: 'Upcoming Session', color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20', icon: Calendar };
+    }
+
+    if (missedSessions || !futureSessions) {
+         return { status: 'Needs Follow-up', color: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20', icon: Info };
+    }
+    
     return { status: 'Active', color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20', icon: CheckCircle2 };
   };
 
@@ -80,7 +92,7 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onEdit, onDelete, onAd
       </div>
 
       {filteredClients.length > 0 ? (
-        <div className="space-y-3 pb-24">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-24">
           {filteredClients.map((client, index) => {
              const due = client.totalFee - client.paidAmount;
              const completedSessions = client.sessions.filter(s => s.status === 'completed' || s.completed).length;
